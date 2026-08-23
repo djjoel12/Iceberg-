@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
 import httpx
 import uvicorn
 
@@ -9,12 +10,11 @@ from scrapers.vtc_others import OtherVTCScraper
 
 app = FastAPI(
     title="Iceberg VTC Comparator",
-    description="Comparateur de prix VTC à Abidjan (Yango, Heetch, InDrive)",
+    description="Comparateur de prix VTC à Abidjan",
     version="1.1.0"
 )
 
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,17 +35,13 @@ async def get_road_route(
     end_lng: float
 ):
     """
-    Récupère un itinéraire routier réel via OSRM.
-
-    Retourne :
-    - distance_km
-    - duration_min
-    - geometry
+    Calcule un itinéraire routier avec OSRM.
     """
 
     url = (
-        f"https://router.project-osrm.org/route/v1/driving/"
-        f"{start_lng},{start_lat};{end_lng},{end_lat}"
+        "https://router.project-osrm.org/route/v1/driving/"
+        f"{start_lng},{start_lat};"
+        f"{end_lng},{end_lat}"
     )
 
     params = {
@@ -55,10 +51,10 @@ async def get_road_route(
     }
 
     try:
+
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
-
             data = response.json()
 
         if data.get("code") != "Ok":
@@ -66,12 +62,9 @@ async def get_road_route(
 
         route = data["routes"][0]
 
-        distance_km = route["distance"] / 1000
-        duration_min = route["duration"] / 60
-
         return {
-            "distance_km": distance_km,
-            "duration_min": duration_min,
+            "distance_km": route["distance"] / 1000,
+            "duration_min": route["duration"] / 60,
             "geometry": route.get("geometry")
         }
 
@@ -79,35 +72,83 @@ async def get_road_route(
         return None
 
 
+def add_price_analysis(results):
+
+    if not results:
+        return results
+
+    prices = [item["price"] for item in results]
+
+    minimum = min(prices)
+    maximum = max(prices)
+
+    for item in results:
+
+        price = item["price"]
+
+        if price == minimum:
+            item["recommendation"] = True
+        else:
+            item["recommendation"] = False
+
+        # Écart par rapport au prix le moins cher
+        if minimum > 0:
+            difference = ((price - minimum) / minimum) * 100
+        else:
+            difference = 0
+
+        item["difference_from_cheapest_percent"] = round(
+            difference,
+            1
+        )
+
+        # Niveau de confiance actuel.
+        # Ce n'est PAS une probabilité de prix réel.
+        item["confidence"] = "medium"
+
+    return results
+
+
 @app.get("/")
 async def root():
+
     return {
         "message": "Iceberg API is running",
         "version": "1.1.0",
         "endpoint": "/api/vtc/compare",
-        "example": (
-            "/api/vtc/compare"
-            "?start_lat=5.3555"
-            "&start_lng=-4.0744"
-            "&end_lat=5.4807"
-            "&end_lng=-4.0746"
-        )
+        "status": "ready"
     }
 
 
 @app.get("/api/vtc/compare")
 async def compare_vtc(
-    start_lat: float = Query(..., description="Latitude de départ"),
-    start_lng: float = Query(..., description="Longitude de départ"),
-    end_lat: float = Query(..., description="Latitude d'arrivée"),
-    end_lng: float = Query(..., description="Longitude d'arrivée")
+
+    start_lat: float = Query(
+        ...,
+        description="Latitude de départ"
+    ),
+
+    start_lng: float = Query(
+        ...,
+        description="Longitude de départ"
+    ),
+
+    end_lat: float = Query(
+        ...,
+        description="Latitude d'arrivée"
+    ),
+
+    end_lng: float = Query(
+        ...,
+        description="Longitude d'arrivée"
+    )
 ):
 
     try:
 
-        # ---------------------------------------------------------
-        # 1. CALCUL DE L'ITINÉRAIRE ROUTIER
-        # ---------------------------------------------------------
+        # ==========================================
+        # 1. ROUTING
+        # ==========================================
 
         route = await get_road_route(
             start_lat,
@@ -117,65 +158,88 @@ async def compare_vtc(
         )
 
         if not route:
+
             raise HTTPException(
                 status_code=503,
-                detail="Impossible de calculer l'itinéraire routier."
+                detail="Impossible de calculer l'itinéraire."
             )
 
         distance_km = route["distance_km"]
         duration_min = route["duration_min"]
 
-        # ---------------------------------------------------------
-        # 2. ESTIMATION YANGO
-        # ---------------------------------------------------------
+
+        # ==========================================
+        # 2. PRIX YANGO
+        # ==========================================
 
         yango_results = await yango_scraper.get_estimates(
-            start_lat,
-            start_lng,
-            end_lat,
-            end_lng
+            distance_km,
+            duration_min
         )
 
-        # ---------------------------------------------------------
-        # 3. IMPORTANT :
-        #    ON FORCE YANGO À UTILISER LA DISTANCE ROUTIÈRE
-        # ---------------------------------------------------------
 
-        for result in yango_results:
-            result["distance_km"] = round(distance_km, 1)
-            result["duration_min"] = round(duration_min, 0)
-
-        # ---------------------------------------------------------
-        # 4. HEETCH + INDRIVE
-        # ---------------------------------------------------------
+        # ==========================================
+        # 3. PRIX HEETCH + INDRIVE
+        # ==========================================
 
         other_results = await other_scraper.get_estimates(
             distance_km,
             duration_min
         )
 
-        # ---------------------------------------------------------
-        # 5. COMBINAISON
-        # ---------------------------------------------------------
 
-        all_results = yango_results + other_results
+        # ==========================================
+        # 4. COMBINAISON
+        # ==========================================
 
-        # Distance/durée routières pour tous
-        for result in all_results:
-            result["distance_km"] = round(distance_km, 1)
-            result["duration_min"] = round(duration_min, 0)
-
-        # Classement par prix
-        all_results = sorted(
-            all_results,
-            key=lambda x: x["price"]
+        all_results = (
+            yango_results +
+            other_results
         )
 
-        # ---------------------------------------------------------
-        # 6. RÉSULTAT
-        # ---------------------------------------------------------
+
+        # ==========================================
+        # 5. ANALYSE DES PRIX
+        # ==========================================
+
+        all_results = add_price_analysis(
+            all_results
+        )
+
+
+        # ==========================================
+        # 6. TRI DU MOINS CHER AU PLUS CHER
+        # ==========================================
+
+        all_results.sort(
+            key=lambda item: item["price"]
+        )
+
+
+        # ==========================================
+        # 7. MEILLEUR PRIX
+        # ==========================================
+
+        best_price = None
+
+        if all_results:
+
+            best = all_results[0]
+
+            best_price = {
+                "provider": best["provider"],
+                "category": best["category"],
+                "price": best["price"],
+                "currency": best["currency"]
+            }
+
+
+        # ==========================================
+        # 8. RÉPONSE
+        # ==========================================
 
         return {
+
             "success": True,
 
             "from": {
@@ -189,24 +253,46 @@ async def compare_vtc(
             },
 
             "route": {
-                "distance_km": round(distance_km, 2),
-                "duration_min": round(duration_min, 1),
+
+                "distance_km": round(
+                    distance_km,
+                    2
+                ),
+
+                "duration_min": round(
+                    duration_min,
+                    1
+                ),
+
                 "geometry": route["geometry"]
             },
 
+            "best_price": best_price,
+
             "results": all_results,
 
-            "note": (
-                "La distance et la durée sont calculées "
-                "à partir d'un itinéraire routier. "
-                "Les prix restent des estimations."
-            )
+            "pricing": {
+
+                "type": "estimated",
+
+                "source": "iceberg_model",
+
+                "real_time": False,
+
+                "message": (
+                    "Les prix affichés sont des estimations "
+                    "Iceberg et ne représentent pas encore "
+                    "les tarifs temps réel des plateformes."
+                )
+            }
+
         }
 
     except HTTPException:
         raise
 
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=f"Erreur lors du calcul : {str(e)}"
@@ -214,9 +300,10 @@ async def compare_vtc(
 
 
 if __name__ == "__main__":
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=8000,
         reload=True
-    )
+        )
