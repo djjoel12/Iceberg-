@@ -1,89 +1,76 @@
-import httpx
-from typing import List, Dict, Any
+from typing import Dict, List, Any
+from math import radians, cos, sin, asin, sqrt
+from datetime import datetime
 
 class YangoScraper:
     def __init__(self):
-        # L'URL exacte capturée depuis tes DevTools
-        self.url = "https://ya-authproxy.yango.com/4.0/persuggest/v1/routestats"
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36",
-            "Content-Type": "application/json",
-            "Origin": "https://yango.com",
-            "Referer": "https://yango.com/",
-            "X-Taxi": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36 turboapp_taxi brand_yango"
-        }
+        pass
 
-    async def get_estimates(self, start_lat: float, start_lng: float, end_lat: float, end_lng: float, distance_km: float = 5.0, duration_min: float = 15.0) -> List[Dict[str, Any]]:
-        # Le payload exact capturé dans tes DevTools
-        payload = {
-            "route": [[start_lng, start_lat], [end_lng, end_lat]],
-            "selected_class": "",
-            "format_currency": True,
-            "is_lightweight": False,
-            "summary_version": 2,
-            "supported_markup": "tml-0.1",
-            "supports_paid_options": True,
-            "use_toll_roads": False,
-            "tariff_requirements": [{"class": "econom", "requirements": {"coupon": ""}}]
-        }
+    async def get_estimates(self, start_lat: float, start_lng: float, end_lat: float, end_lng: float) -> List[Dict[str, Any]]:
+        distance_km = self._calculate_distance(start_lat, start_lng, end_lat, end_lng)
+        duration_min = self._estimate_duration(distance_km)
+        surge = self._get_surge_multiplier()
 
-        # 1. Envoi de la requête directe à l'API Yango issue des DevTools
-        try:
-            async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
-                response = await client.post(self.url, json=payload, headers=self.headers)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    results = []
-                    
-                    # Traitement de la réponse JSON de Yango
-                    service_levels = data.get("service_levels", []) or data.get("options", [])
-                    for level in service_levels:
-                        name = level.get("title") or level.get("class_text") or "Yango Eco"
-                        price_str = level.get("price") or level.get("cost")
-                        
-                        if price_str:
-                            # Extraction du prix numérique
-                            price = int(''.join(filter(str.isdigit, str(price_str))))
-                            results.append({
-                                "provider": "Yango",
-                                "category": f"Yango {name}",
-                                "price": price,
-                                "currency": "XOF",
-                                "eta_minutes": 3,
-                                "distance_km": distance_km,
-                                "duration_min": duration_min
-                            })
-                    
-                    if results:
-                        return results
-        except Exception as e:
-            print(f"Information Yango Direct API : {e}")
+        # Formule calibrée sur les prix réels 2026 (ex: Siporex → Ebimpé = 6900F)
+        base = 800
+        price_per_km = 280
+        price_per_min = 45
 
-        # 2. Secours automatique avec la grille tarifaire d'Abidjan si l'API ne répond pas
-        raw_price_eco = 400 + (distance_km * 110) + (duration_min * 15)
-        raw_price_comfort = 700 + (distance_km * 160) + (duration_min * 25)
-        
-        price_eco = max(int(round(raw_price_eco / 50.0) * 50), 400)
-        price_comfort = max(int(round(raw_price_comfort / 50.0) * 50), 700)
+        eco_raw = (base + (distance_km * price_per_km) + (duration_min * price_per_min)) * surge
+        comfort_raw = eco_raw * 1.18
+
+        eco_price = max(1500, self._round_price(eco_raw))
+        comfort_price = max(2000, self._round_price(comfort_raw))
 
         return [
             {
                 "provider": "Yango",
                 "category": "Yango Eco",
-                "price": price_eco,
+                "price": eco_price,
                 "currency": "XOF",
-                "eta_minutes": 3,
-                "distance_km": distance_km,
-                "duration_min": duration_min
+                "eta_minutes": 4,
+                "distance_km": round(distance_km, 1),
+                "duration_min": round(duration_min, 0),
+                "is_estimate": True
             },
             {
                 "provider": "Yango",
                 "category": "Yango Comfort",
-                "price": price_comfort,
+                "price": comfort_price,
                 "currency": "XOF",
-                "eta_minutes": 3,
-                "distance_km": distance_km,
-                "duration_min": duration_min
+                "eta_minutes": 5,
+                "distance_km": round(distance_km, 1),
+                "duration_min": round(duration_min, 0),
+                "is_estimate": True
             }
         ]
+
+    def _calculate_distance(self, lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+        lon1, lat1, lon2, lat2 = map(radians, [lng1, lat1, lng2, lat2])
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        return 6371 * 2 * asin(sqrt(a))
+
+    def _estimate_duration(self, distance_km: float) -> float:
+        # Vitesse moyenne réaliste à Abidjan (trafic inclus)
+        if distance_km < 5:
+            return distance_km * 4.5 + 6
+        elif distance_km < 15:
+            return distance_km * 3.8 + 8
+        else:
+            return distance_km * 3.2 + 12
+
+    def _get_surge_multiplier(self) -> float:
+        hour = datetime.now().hour
+        # Heures de pointe Abidjan
+        if hour in [7, 8, 9, 17, 18, 19]:
+            return 1.45
+        elif hour in [6, 10, 16, 20]:
+            return 1.25
+        elif hour >= 22 or hour <= 5:
+            return 1.35
+        return 1.0
+
+    def _round_price(self, price: float) -> int:
+        return int(round(price / 100) * 100)
