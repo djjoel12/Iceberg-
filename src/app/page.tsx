@@ -1,6 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
+
+const Map = dynamic(
+  () => import("../components/Map"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[400px] items-center justify-center rounded-2xl bg-gray-200">
+        Chargement de la carte...
+      </div>
+    ),
+  }
+);
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
@@ -8,14 +21,16 @@ export default function Home() {
   async function compare() {
     setLoading(true);
 
-    // La connexion au moteur Iceberg sera ajoutée juste après.
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) =>
+      setTimeout(resolve, 500)
+    );
 
     setLoading(false);
   }
 
   return (
     <main className="min-h-screen bg-gray-50">
+
       <header className="bg-gray-950 px-5 py-6 text-white">
         <h1 className="text-3xl font-bold tracking-wide">
           ICEBERG
@@ -59,24 +74,19 @@ export default function Home() {
             disabled={loading}
             className="w-full rounded-xl bg-gray-950 p-4 font-bold text-white transition hover:bg-gray-800 disabled:opacity-60"
           >
-            {loading ? "Comparaison..." : "Comparer les prix"}
+            {loading
+              ? "Comparaison..."
+              : "Comparer les prix"}
           </button>
 
         </div>
 
-        <div className="mt-5 flex h-[400px] items-center justify-center rounded-2xl bg-gray-200">
-          <div className="text-center text-gray-500">
-            <div className="text-4xl">🗺️</div>
-            <p className="mt-2 font-semibold">
-              La carte Iceberg
-            </p>
-            <p className="text-sm">
-              sera ajoutée à l'étape suivante
-            </p>
-          </div>
+        <div className="mt-5 overflow-hidden rounded-2xl shadow-sm">
+          <Map />
         </div>
 
       </section>
+
     </main>
   );
-}
+        }
