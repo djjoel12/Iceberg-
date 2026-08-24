@@ -1,20 +1,10 @@
-
 "use client";
 
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-} from "react-leaflet";
-
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
-const defaultPosition: [number, number] = [
-  5.3364,
-  -4.0267,
-];
+const position: [number, number] = [5.3364, -4.0267];
 
 const markerIcon = L.icon({
   iconUrl:
@@ -30,28 +20,21 @@ const markerIcon = L.icon({
 export default function Map() {
   return (
     <MapContainer
-      center={defaultPosition}
+      center={position}
       zoom={12}
-      scrollWheelZoom={true}
+      scrollWheelZoom
       style={{
         width: "100%",
-        height: "100%",
-        minHeight: "400px",
-        borderRadius: "16px",
+        height: "400px",
       }}
     >
       <TileLayer
-        attribution='&copy; OpenStreetMap contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution="&copy; OpenStreetMap contributors"
       />
 
-      <Marker
-        position={defaultPosition}
-        icon={markerIcon}
-      >
-        <Popup>
-          📍 Abidjan
-        </Popup>
+      <Marker position={position} icon={markerIcon}>
+        <Popup>📍 Abidjan</Popup>
       </Marker>
     </MapContainer>
   );
