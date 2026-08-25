@@ -54,7 +54,8 @@ class YangoScraper:
 
     def _detect_events(self) -> List[Dict[str, Any]]:
         """Événements ACTIFS maintenant."""
-        hour = datetime.now().hour
+        # hour = datetime.now().hour  # ← Commenté pour test
+        hour = 22  # ← FORCÉ À 22H
         events = []
 
         if hour in [7, 8, 9]:
