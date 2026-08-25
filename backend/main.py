@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Optional, List, Dict, Any
 import httpx
 import uvicorn
 
@@ -144,204 +144,66 @@ def round_price(price):
 
 
 # ============================================================
-# ANALYSE DES EVENEMENTS
+# GÉNÉRATEUR DE SCÉNARIOS (prospectifs, n'affectent pas le prix)
 # ============================================================
 
-def analyze_events(
+def generate_scenarios(
     price: float,
     distance_km: float,
     duration_min: float,
     provider: str
-):
-
-    now = datetime.now()
-
-    hour = now.hour
-
-    events = []
-
-
-    # --------------------------------------------------------
-    # 1. HEURE DE POINTE
-    # --------------------------------------------------------
-
-    rush_hour = (
-        6 <= hour < 9
-        or
-        16 <= hour < 20
-    )
-
-    if rush_hour:
-
-        events.append({
-            "type": "rush_hour",
-            "label": "Heure de pointe",
-            "impact_percent": 10,
-            "reason": (
-                "La demande peut être plus élevée "
-                "pendant les heures de pointe."
-            )
-        })
-
-
-    # --------------------------------------------------------
-    # 2. TRAJET LONG
-    # --------------------------------------------------------
-
-    if distance_km >= 20:
-
-        events.append({
-            "type": "long_distance",
-            "label": "Trajet long",
-            "impact_percent": 5,
-            "reason": (
-                "Les longs trajets peuvent présenter "
-                "une variation supérieure à la moyenne."
-            )
-        })
-
-
-    # --------------------------------------------------------
-    # 3. TRAJET TRES LONG
-    # --------------------------------------------------------
-
-    if distance_km >= 40:
-
-        events.append({
-            "type": "very_long_distance",
-            "label": "Très longue distance",
-            "impact_percent": 8,
-            "reason": (
-                "Les très longues distances peuvent "
-                "avoir un comportement tarifaire différent."
-            )
-        })
-
-
-    # --------------------------------------------------------
-    # 4. DUREE IMPORTANTE
-    # --------------------------------------------------------
-
-    if duration_min >= 35:
-
-        events.append({
-            "type": "long_duration",
-            "label": "Durée importante",
-            "impact_percent": 5,
-            "reason": (
-                "Une durée de trajet importante peut "
-                "augmenter le prix final."
-            )
-        })
-
-
-    # --------------------------------------------------------
-    # 5. FORTE DEMANDE
-    #
-    # IMPORTANT :
-    # Pour l'instant c'est une estimation.
-    # Plus tard cette valeur viendra des données ICEBERG.
-    # --------------------------------------------------------
-
-    if rush_hour:
-
-        events.append({
-            "type": "high_demand",
-            "label": "Demande potentiellement élevée",
-            "impact_percent": 15,
-            "reason": (
-                "Les heures de pointe peuvent correspondre "
-                "à une demande plus importante."
-            )
-        })
-
-
-    # --------------------------------------------------------
-    # CALCUL DES SCENARIOS
-    # --------------------------------------------------------
-
+) -> List[Dict[str, Any]]:
+    """Génère des scénarios prospectifs SANS affecter le prix actuel."""
+    
     scenarios = []
-
-    for event in events:
-
-        impact = event["impact_percent"]
-
-        scenario_price = round_price(
-            price * (1 + impact / 100)
-        )
-
-        scenarios.append({
-
-            "event": event["label"],
-
-            "impact_percent": impact,
-
-            "price": scenario_price,
-
-            "currency": "FCFA",
-
-            "reason": event["reason"]
-        })
-
-
-    # --------------------------------------------------------
-    # SCENARIO COMBINE
-    #
-    # On évite d'additionner directement tous les %
-    # pour ne pas créer des prix absurdes.
-    #
-    # Plafond actuel : +40 %
-    # --------------------------------------------------------
-
-    total_impact = sum(
-        event["impact_percent"]
-        for event in events
-    )
-
-    total_impact = min(
-        total_impact,
-        40
-    )
-
-    maximum_price = round_price(
-        price * (1 + total_impact / 100)
-    )
-
-
-    # --------------------------------------------------------
-    # FOURCHETTE
-    # --------------------------------------------------------
-
-    minimum_price = round_price(price)
-
-    return {
-
-        "reference_price": round_price(price),
-
+    
+    # Scénario 1 : Heure de pointe matin
+    scenarios.append({
+        "event": "Heure de pointe matin",
+        "impact_percent": 20,
+        "price": round_price(price * 1.20),
         "currency": "FCFA",
-
-        "events_detected": events,
-
-        "scenarios": scenarios,
-
-        "combined_scenario": {
-
-            "total_impact_percent": total_impact,
-
-            "minimum_price": minimum_price,
-
-            "maximum_price": maximum_price,
-
-            "currency": "FCFA"
-        },
-
-        "message": (
-            "Le prix de référence correspond à l'estimation "
-            "dans des conditions normales. Les scénarios "
-            "montrent comment le prix pourrait évoluer "
-            "selon les facteurs détectés."
-        )
-    }
+        "reason": "Si la course est demandée entre 7h et 9h"
+    })
+    
+    # Scénario 2 : Heure de pointe soir
+    scenarios.append({
+        "event": "Heure de pointe soir",
+        "impact_percent": 25,
+        "price": round_price(price * 1.25),
+        "currency": "FCFA",
+        "reason": "Si la course est demandée entre 17h et 19h"
+    })
+    
+    # Scénario 3 : Tarif de nuit
+    scenarios.append({
+        "event": "Tarif de nuit",
+        "impact_percent": 15,
+        "price": round_price(price * 1.15),
+        "currency": "FCFA",
+        "reason": "Si la course est demandée entre 22h et 5h"
+    })
+    
+    # Scénario 4 : Demande modérée
+    scenarios.append({
+        "event": "Demande modérée",
+        "impact_percent": 10,
+        "price": round_price(price * 1.10),
+        "currency": "FCFA",
+        "reason": "Si la course est demandée en début/fin de pointe"
+    })
+    
+    # Scénario 5 : Trajet long
+    if distance_km >= 20:
+        scenarios.append({
+            "event": "Trajet long",
+            "impact_percent": 10,
+            "price": round_price(price * 1.10),
+            "currency": "FCFA",
+            "reason": "Les longs trajets peuvent avoir une variation de prix"
+        })
+    
+    return scenarios
 
 
 # ============================================================
@@ -449,7 +311,7 @@ async def compare_vtc(
 
 
         # ====================================================
-        # 5. ANALYSE
+        # 5. ANALYSE DES PRIX (recommandation, % diff)
         # ====================================================
 
         all_results = add_price_analysis(
@@ -467,21 +329,38 @@ async def compare_vtc(
 
 
         # ====================================================
-        # 7. ANALYSE DES EVENEMENTS POUR CHAQUE VTC
+        # 7. AJOUT DES SCÉNARIOS PROSPECTIFS (sans écraser)
         # ====================================================
 
         for item in all_results:
-
-            item["price_analysis"] = analyze_events(
-
+            # Récupère l'analyse existante des scraper
+            existing_analysis = item.get("price_analysis", {})
+            existing_events = existing_analysis.get("events_detected", [])
+            
+            # Génère les scénarios prospectifs
+            scenarios = generate_scenarios(
                 price=item["price"],
-
                 distance_km=distance_km,
-
                 duration_min=duration_min,
-
                 provider=item["provider"]
             )
+            
+            # Calcule l'impact max des scénarios
+            max_impact = max((s.get("impact_percent", 0) for s in scenarios), default=0)
+            max_price = max([s.get("price", item["price"]) for s in scenarios] + [item["price"]])
+            
+            # Fusionne : garde les événements réels + ajoute les scénarios
+            item["price_analysis"] = {
+                "events_detected": existing_events,  # ← Événements réels des scraper
+                "scenarios": scenarios,               # ← Scénarios prospectifs
+                "combined_scenario": {
+                    "total_impact_percent": max_impact,
+                    "minimum_price": item["price"],
+                    "maximum_price": max_price,
+                    "currency": "FCFA"
+                },
+                "confidence": "medium"
+            }
 
 
         # ====================================================
@@ -601,4 +480,4 @@ if __name__ == "__main__":
         port=8000,
 
         reload=True
-    )
+        )
