@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
 import httpx
 import uvicorn
 
@@ -15,6 +14,10 @@ app = FastAPI(
 )
 
 
+# ============================================================
+# CORS
+# ============================================================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,9 +27,17 @@ app.add_middleware(
 )
 
 
+# ============================================================
+# SCRAPERS
+# ============================================================
+
 yango_scraper = YangoScraper()
 other_scraper = OtherVTCScraper()
 
+
+# ============================================================
+# ROUTING OSRM
+# ============================================================
 
 async def get_road_route(
     start_lat: float,
@@ -35,7 +46,8 @@ async def get_road_route(
     end_lng: float
 ):
     """
-    Calcule un itinéraire routier avec OSRM.
+    Calcule plusieurs itinéraires routiers avec OSRM
+    et sélectionne celui qui possède la plus petite distance.
     """
 
     url = (
@@ -47,20 +59,41 @@ async def get_road_route(
     params = {
         "overview": "full",
         "geometries": "geojson",
-        "steps": "false"
+        "steps": "false",
+        "alternatives": "true"
     }
 
     try:
 
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, params=params)
+
+            response = await client.get(
+                url,
+                params=params
+            )
+
             response.raise_for_status()
+
             data = response.json()
+
+        # Vérification de la réponse OSRM
 
         if data.get("code") != "Ok":
             return None
 
-        route = data["routes"][0]
+        routes = data.get("routes", [])
+
+        if not routes:
+            return None
+
+        # ====================================================
+        # CHOIX DU CHEMIN LE PLUS COURT
+        # ====================================================
+
+        route = min(
+            routes,
+            key=lambda r: r["distance"]
+        )
 
         return {
             "distance_km": route["distance"] / 1000,
@@ -72,12 +105,19 @@ async def get_road_route(
         return None
 
 
+# ============================================================
+# ANALYSE DES PRIX
+# ============================================================
+
 def add_price_analysis(results):
 
     if not results:
         return results
 
-    prices = [item["price"] for item in results]
+    prices = [
+        item["price"]
+        for item in results
+    ]
 
     minimum = min(prices)
     maximum = max(prices)
@@ -86,28 +126,47 @@ def add_price_analysis(results):
 
         price = item["price"]
 
+        # Meilleur prix
+
         if price == minimum:
             item["recommendation"] = True
         else:
             item["recommendation"] = False
 
-        # Écart par rapport au prix le moins cher
+        # ====================================================
+        # ÉCART PAR RAPPORT AU MOINS CHER
+        # ====================================================
+
         if minimum > 0:
-            difference = ((price - minimum) / minimum) * 100
+
+            difference = (
+                (price - minimum)
+                / minimum
+            ) * 100
+
         else:
+
             difference = 0
 
-        item["difference_from_cheapest_percent"] = round(
+        item[
+            "difference_from_cheapest_percent"
+        ] = round(
             difference,
             1
         )
 
-        # Niveau de confiance actuel.
-        # Ce n'est PAS une probabilité de prix réel.
+        # ====================================================
+        # CONFIANCE
+        # ====================================================
+
         item["confidence"] = "medium"
 
     return results
 
+
+# ============================================================
+# ROUTE PRINCIPALE
+# ============================================================
 
 @app.get("/")
 async def root():
@@ -119,6 +178,10 @@ async def root():
         "status": "ready"
     }
 
+
+# ============================================================
+# COMPARATEUR VTC
+# ============================================================
 
 @app.get("/api/vtc/compare")
 async def compare_vtc(
@@ -146,9 +209,9 @@ async def compare_vtc(
 
     try:
 
-        # ==========================================
+        # ====================================================
         # 1. ROUTING
-        # ==========================================
+        # ====================================================
 
         route = await get_road_route(
             start_lat,
@@ -165,12 +228,13 @@ async def compare_vtc(
             )
 
         distance_km = route["distance_km"]
+
         duration_min = route["duration_min"]
 
 
-        # ==========================================
+        # ====================================================
         # 2. PRIX YANGO
-        # ==========================================
+        # ====================================================
 
         yango_results = await yango_scraper.get_estimates(
             distance_km,
@@ -178,9 +242,9 @@ async def compare_vtc(
         )
 
 
-        # ==========================================
+        # ====================================================
         # 3. PRIX HEETCH + INDRIVE
-        # ==========================================
+        # ====================================================
 
         other_results = await other_scraper.get_estimates(
             distance_km,
@@ -188,9 +252,9 @@ async def compare_vtc(
         )
 
 
-        # ==========================================
+        # ====================================================
         # 4. COMBINAISON
-        # ==========================================
+        # ====================================================
 
         all_results = (
             yango_results +
@@ -198,27 +262,27 @@ async def compare_vtc(
         )
 
 
-        # ==========================================
-        # 5. ANALYSE DES PRIX
-        # ==========================================
+        # ====================================================
+        # 5. ANALYSE
+        # ====================================================
 
         all_results = add_price_analysis(
             all_results
         )
 
 
-        # ==========================================
+        # ====================================================
         # 6. TRI DU MOINS CHER AU PLUS CHER
-        # ==========================================
+        # ====================================================
 
         all_results.sort(
             key=lambda item: item["price"]
         )
 
 
-        # ==========================================
+        # ====================================================
         # 7. MEILLEUR PRIX
-        # ==========================================
+        # ====================================================
 
         best_price = None
 
@@ -227,29 +291,40 @@ async def compare_vtc(
             best = all_results[0]
 
             best_price = {
+
                 "provider": best["provider"],
+
                 "category": best["category"],
+
                 "price": best["price"],
+
                 "currency": best["currency"]
+
             }
 
 
-        # ==========================================
+        # ====================================================
         # 8. RÉPONSE
-        # ==========================================
+        # ====================================================
 
         return {
 
             "success": True,
 
             "from": {
+
                 "lat": start_lat,
+
                 "lng": start_lng
+
             },
 
             "to": {
+
                 "lat": end_lat,
+
                 "lng": end_lng
+
             },
 
             "route": {
@@ -265,6 +340,7 @@ async def compare_vtc(
                 ),
 
                 "geometry": route["geometry"]
+
             },
 
             "best_price": best_price,
@@ -284,26 +360,42 @@ async def compare_vtc(
                     "Iceberg et ne représentent pas encore "
                     "les tarifs temps réel des plateformes."
                 )
+
             }
 
         }
 
+
     except HTTPException:
+
         raise
+
 
     except Exception as e:
 
         raise HTTPException(
+
             status_code=500,
+
             detail=f"Erreur lors du calcul : {str(e)}"
+
         )
 
+
+# ============================================================
+# LANCEMENT LOCAL
+# ============================================================
 
 if __name__ == "__main__":
 
     uvicorn.run(
+
         "main:app",
+
         host="0.0.0.0",
+
         port=8000,
+
         reload=True
-        )
+
+            )
