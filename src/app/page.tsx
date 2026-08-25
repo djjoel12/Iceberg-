@@ -122,10 +122,12 @@ export default function Home() {
 
     setLoading(true);
 
+
+    
     try {
       const resp = await fetch(
-        `/api/compare?start_lat=\( {start.lat}&start_lng= \){start.lng}&end_lat=\( {end.lat}&end_lng= \){end.lng}`
-      );
+  `/api/compare?start_lat=\( {start.lat}&start_lng= \){start.lng}&end_lat=\( {end.lat}&end_lng= \){end.lng}`
+);
 
       if (!resp.ok) {
         const txt = await resp.text();
