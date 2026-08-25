@@ -16,42 +16,47 @@ class OtherVTCScraper:
         if distance_km <= 0 or duration_min <= 0:
             return []
 
-        # On repart de la même base Éco que Yango
-        eco = self._estimate_eco(distance_km)
+        base_eco = self._estimate_eco(distance_km)
+        events = self._detect_events()
 
-        # Heetch ≈ légèrement au-dessus de Yango Confort
-        heetch = max(1800, self._round(eco * 1.15))
-        heetch_low, heetch_high = self._price_range(heetch)
+        # Heetch un peu au-dessus
+        heetch_base = max(1800, self._round(base_eco * 1.15))
+        heetch_final = self._apply_events(heetch_base, events)
+        heetch_low, heetch_high = self._price_range(heetch_final)
 
-        # InDrive ≈ un peu en dessous (négociation possible)
-        indrive = max(1500, self._round(eco * 0.88))
-        indrive_low, indrive_high = self._price_range(indrive)
+        # InDrive un peu en dessous (négociation)
+        indrive_base = max(1500, self._round(base_eco * 0.88))
+        indrive_final = self._apply_events(indrive_base, events)
+        indrive_low, indrive_high = self._price_range(indrive_final)
 
         return [
             self._item(
-                provider="Heetch",
-                category="Classique",
-                price=heetch,
-                distance_km=distance_km,
-                duration_min=duration_min,
-                eta=6,
-                price_min=heetch_low,
-                price_max=heetch_high,
+                "Heetch",
+                "Classique",
+                heetch_base,
+                heetch_final,
+                distance_km,
+                duration_min,
+                6,
+                events,
+                heetch_low,
+                heetch_high,
             ),
             self._item(
-                provider="InDrive",
-                category="Offre recommandée",
-                price=indrive,
-                distance_km=distance_km,
-                duration_min=duration_min,
-                eta=7,
-                price_min=indrive_low,
-                price_max=indrive_high,
+                "InDrive",
+                "Offre recommandée",
+                indrive_base,
+                indrive_final,
+                distance_km,
+                duration_min,
+                7,
+                events,
+                indrive_low,
+                indrive_high,
             ),
         ]
 
     def _estimate_eco(self, d: float) -> int:
-        """Même formule de base que Yango Éco (référence)."""
         if d <= 5:
             price = 1500 + (d - 3) * 150
         elif d <= 10:
@@ -67,6 +72,42 @@ class OtherVTCScraper:
 
         return max(1500, self._round(price))
 
+    def _detect_events(self) -> List[Dict[str, Any]]:
+        hour = datetime.now().hour
+        events = []
+
+        if hour in [7, 8, 9]:
+            events.append({
+                "label": "Heure de pointe (matin)",
+                "impact_percent": 18,
+                "reason": "Forte demande entre 7h et 9h"
+            })
+        elif hour in [17, 18, 19]:
+            events.append({
+                "label": "Heure de pointe (soir)",
+                "impact_percent": 22,
+                "reason": "Forte demande entre 17h et 19h"
+            })
+        elif hour in [6, 10, 16, 20]:
+            events.append({
+                "label": "Demande modérée",
+                "impact_percent": 8,
+                "reason": "Légère hausse de la demande"
+            })
+        elif hour >= 22 or hour <= 5:
+            events.append({
+                "label": "Tarif de nuit",
+                "impact_percent": 12,
+                "reason": "Tarification nocturne"
+            })
+
+        return events
+
+    def _apply_events(self, base_price: int, events: List[Dict[str, Any]]) -> int:
+        total_impact = sum(e["impact_percent"] for e in events)
+        multiplier = 1 + (total_impact / 100)
+        return max(1500, self._round(base_price * multiplier))
+
     def _price_range(self, base: int) -> tuple:
         margin = 0.08
         low = max(1500, self._round(base * (1 - margin)))
@@ -80,10 +121,12 @@ class OtherVTCScraper:
         self,
         provider: str,
         category: str,
-        price: int,
+        base_price: int,
+        final_price: int,
         distance_km: float,
         duration_min: float,
         eta: int,
+        events: List[Dict[str, Any]],
         price_min: Optional[int] = None,
         price_max: Optional[int] = None,
     ) -> Dict[str, Any]:
@@ -91,13 +134,18 @@ class OtherVTCScraper:
         item = {
             "provider": provider,
             "category": category,
-            "price": price,
+            "price": final_price,
             "currency": "XOF",
             "eta_minutes": eta,
             "distance_km": round(distance_km, 1),
             "duration_min": round(duration_min, 0),
             "is_estimate": True,
             "price_source": "iceberg_model_v1",
+            "price_analysis": {
+                "base_price": base_price,
+                "final_price": final_price,
+                "events_detected": events,
+            },
         }
 
         if price_min is not None and price_max is not None:
