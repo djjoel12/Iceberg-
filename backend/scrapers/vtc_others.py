@@ -59,7 +59,8 @@ class OtherVTCScraper:
         return max(1500, self._round(price))
 
     def _detect_events(self) -> List[Dict[str, Any]]:
-        hour = datetime.now().hour
+        hour = 22  # ← FORCÉ À 22H
+        # hour = datetime.now().hour  # ← Commenté pour test
         events = []
 
         if hour in [7, 8, 9]:
