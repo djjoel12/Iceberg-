@@ -9,15 +9,7 @@ from scrapers.vtc_yango import YangoScraper
 from scrapers.vtc_others import OtherVTCScraper
 
 
-# ============================================================
-# APPLICATION
-# ============================================================
-
-app = FastAPI(
-    title="Iceberg VTC Comparator",
-    description="Comparateur de prix VTC à Abidjan",
-    version="1.2.0"
-)
+app = FastAPI(title="Iceberg VTC Comparator", version="1.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,28 +24,24 @@ other_scraper = OtherVTCScraper()
 
 
 # ============================================================
-# ROUTING - RETOURNE 2 CHEMINS
+# ROUTING - 2 CHEMINS
 # ============================================================
 
-async def get_road_routes(
-    start_lat: float,
-    start_lng: float,
-    end_lat: float,
-    end_lng: float
-):
+async def get_road_routes(start_lat, start_lng, end_lat, end_lng):
     """Retourne le chemin le plus court et le plus rapide."""
+    
+    print("🔍 get_road_routes appelée !")  # ← DEBUG
     
     url = (
         "https://router.project-osrm.org/route/v1/driving/"
-        f"{start_lng},{start_lat};"
-        f"{end_lng},{end_lat}"
+        f"{start_lng},{start_lat};{end_lng},{end_lat}"
     )
 
     params = {
         "overview": "full",
         "geometries": "geojson",
         "steps": "false",
-        "alternatives": "true"  # ← Demande plusieurs itinéraires
+        "alternatives": "true"
     }
 
     try:
@@ -62,13 +50,14 @@ async def get_road_routes(
             response.raise_for_status()
             data = response.json()
 
+        print(f"🔍 OSRM a retourné {len(data.get('routes', []))} routes")  # ← DEBUG
+
         if data.get("code") != "Ok" or not data.get("routes"):
             return []
 
         routes = data["routes"]
         
         if len(routes) == 1:
-            # Un seul chemin disponible
             route = routes[0]
             return [{
                 "id": 1,
@@ -80,13 +69,13 @@ async def get_road_routes(
                 "is_fastest": True,
             }]
         
-        # Trouve le PLUS COURT et le PLUS RAPIDE
+        # PLUS COURT
         shortest = min(routes, key=lambda r: r["distance"])
+        # PLUS RAPIDE
         fastest = min(routes, key=lambda r: r["duration"])
         
         result = []
         
-        # 1. Chemin le PLUS COURT
         result.append({
             "id": 1,
             "label": "Le moins cher",
@@ -97,8 +86,8 @@ async def get_road_routes(
             "is_fastest": False,
         })
         
-        # 2. Chemin le PLUS RAPIDE (si différent du plus court)
-        if shortest["distance"] != fastest["distance"]:
+        # Si les deux sont différents, ajoute le plus rapide
+        if shortest["distance"] != fastest["distance"] or shortest["duration"] != fastest["duration"]:
             result.append({
                 "id": 2,
                 "label": "Le plus rapide",
@@ -109,39 +98,34 @@ async def get_road_routes(
                 "is_fastest": True,
             })
         
+        print(f"🔍 Routes retournées: {len(result)}")  # ← DEBUG
         return result
 
     except Exception as e:
-        print(f"Erreur route: {e}")
+        print(f"❌ Erreur route: {e}")
         return []
 
 
 # ============================================================
-# ANALYSE DES PRIX
+# ANALYSE
 # ============================================================
 
 def add_price_analysis(results):
     if not results:
         return results
-
     prices = [item["price"] for item in results if item.get("price") is not None]
     if not prices:
         return results
-
     minimum = min(prices)
-
     for item in results:
         price = item["price"]
         item["recommendation"] = (price == minimum)
-        
         if minimum > 0:
             difference = ((price - minimum) / minimum) * 100
         else:
             difference = 0
-            
         item["difference_from_cheapest_percent"] = round(difference, 1)
         item["confidence"] = "medium"
-
     return results
 
 
@@ -149,14 +133,8 @@ def round_price(price):
     return int(round(price / 100) * 100)
 
 
-def generate_scenarios(
-    price: float,
-    distance_km: float,
-    duration_min: float,
-    provider: str
-) -> List[Dict[str, Any]]:
+def generate_scenarios(price, distance_km, duration_min, provider):
     scenarios = []
-    
     scenarios.append({
         "event": "Heure de pointe matin",
         "impact_percent": 20,
@@ -164,7 +142,6 @@ def generate_scenarios(
         "currency": "FCFA",
         "reason": "Si la course est demandée entre 7h et 9h"
     })
-    
     scenarios.append({
         "event": "Heure de pointe soir",
         "impact_percent": 25,
@@ -172,7 +149,6 @@ def generate_scenarios(
         "currency": "FCFA",
         "reason": "Si la course est demandée entre 17h et 19h"
     })
-    
     scenarios.append({
         "event": "Tarif de nuit",
         "impact_percent": 15,
@@ -180,7 +156,6 @@ def generate_scenarios(
         "currency": "FCFA",
         "reason": "Si la course est demandée entre 22h et 5h"
     })
-    
     scenarios.append({
         "event": "Demande modérée",
         "impact_percent": 10,
@@ -188,7 +163,6 @@ def generate_scenarios(
         "currency": "FCFA",
         "reason": "Si la course est demandée en début/fin de pointe"
     })
-    
     if distance_km >= 20:
         scenarios.append({
             "event": "Trajet long",
@@ -197,7 +171,6 @@ def generate_scenarios(
             "currency": "FCFA",
             "reason": "Les longs trajets peuvent avoir une variation de prix"
         })
-    
     return scenarios
 
 
@@ -217,62 +190,47 @@ async def root():
 
 @app.get("/api/vtc/compare")
 async def compare_vtc(
-    start_lat: float = Query(..., description="Latitude de départ"),
-    start_lng: float = Query(..., description="Longitude de départ"),
-    end_lat: float = Query(..., description="Latitude d'arrivée"),
-    end_lng: float = Query(..., description="Longitude d'arrivée"),
-    route_id: Optional[int] = Query(1, description="ID du chemin (1=plus court, 2=plus rapide)")
+    start_lat: float = Query(...),
+    start_lng: float = Query(...),
+    end_lat: float = Query(...),
+    end_lng: float = Query(...),
+    route_id: Optional[int] = Query(1)
 ):
-
     try:
-        # ====================================================
-        # 1. ROUTES (2 chemins)
-        # ====================================================
+        # 1. ROUTES
         routes = await get_road_routes(start_lat, start_lng, end_lat, end_lng)
         
+        print(f"🔍 routes: {routes}")  # ← DEBUG
+        
         if not routes:
-            raise HTTPException(
-                status_code=503,
-                detail="Impossible de calculer l'itinéraire."
-            )
+            raise HTTPException(status_code=503, detail="Impossible de calculer l'itinéraire.")
 
-        # Sélectionne le chemin demandé
+        # Sélectionne le chemin
         selected_route = None
         for r in routes:
             if r["id"] == route_id:
                 selected_route = r
                 break
-        
         if not selected_route:
-            selected_route = routes[0]  # Fallback sur le premier
+            selected_route = routes[0]
         
         distance_km = selected_route["distance_km"]
         duration_min = selected_route["duration_min"]
 
-        # ====================================================
         # 2. YANGO
-        # ====================================================
         yango_results = await yango_scraper.get_estimates(distance_km, duration_min)
 
-        # ====================================================
-        # 3. AUTRES VTC
-        # ====================================================
+        # 3. AUTRES
         other_results = await other_scraper.get_estimates(distance_km, duration_min)
 
-        # ====================================================
         # 4. COMBINAISON
-        # ====================================================
         all_results = yango_results + other_results
 
-        # ====================================================
-        # 5. ANALYSE DES PRIX
-        # ====================================================
+        # 5. ANALYSE
         all_results = add_price_analysis(all_results)
         all_results.sort(key=lambda item: item["price"])
 
-        # ====================================================
-        # 6. AJOUT DES SCÉNARIOS
-        # ====================================================
+        # 6. SCÉNARIOS
         for item in all_results:
             existing_analysis = item.get("price_analysis", {})
             existing_events = existing_analysis.get("events_detected", [])
@@ -299,9 +257,7 @@ async def compare_vtc(
                 "confidence": "medium"
             }
 
-        # ====================================================
         # 7. MEILLEUR PRIX
-        # ====================================================
         best_price = None
         if all_results:
             best = all_results[0]
@@ -312,14 +268,12 @@ async def compare_vtc(
                 "currency": best["currency"]
             }
 
-        # ====================================================
         # 8. REPONSE
-        # ====================================================
         return {
             "success": True,
             "from": {"lat": start_lat, "lng": start_lng},
             "to": {"lat": end_lat, "lng": end_lng},
-            "routes": routes,  # ← TOUS les chemins disponibles
+            "routes": routes,  # ← LES 2 CHEMINS
             "selected_route_id": route_id,
             "selected_route": selected_route,
             "route": {
@@ -340,10 +294,8 @@ async def compare_vtc(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erreur lors du calcul : {str(e)}"
-        )
+        print(f"❌ Erreur: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 
 if __name__ == "__main__":
