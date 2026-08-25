@@ -18,41 +18,28 @@ class OtherVTCScraper:
 
         base_eco = self._estimate_eco(distance_km)
         events = self._detect_events()
+        scenarios = self._get_scenarios()
 
-        # Heetch un peu au-dessus
         heetch_base = max(1800, self._round(base_eco * 1.15))
         heetch_final = self._apply_events(heetch_base, events)
         heetch_low, heetch_high = self._price_range(heetch_final)
 
-        # InDrive un peu en dessous (négociation)
         indrive_base = max(1500, self._round(base_eco * 0.88))
         indrive_final = self._apply_events(indrive_base, events)
         indrive_low, indrive_high = self._price_range(indrive_final)
 
         return [
             self._item(
-                "Heetch",
-                "Classique",
-                heetch_base,
-                heetch_final,
-                distance_km,
-                duration_min,
-                6,
-                events,
-                heetch_low,
-                heetch_high,
+                "Heetch", "Classique",
+                heetch_base, heetch_final,
+                distance_km, duration_min, 6,
+                events, scenarios, heetch_low, heetch_high
             ),
             self._item(
-                "InDrive",
-                "Offre recommandée",
-                indrive_base,
-                indrive_final,
-                distance_km,
-                duration_min,
-                7,
-                events,
-                indrive_low,
-                indrive_high,
+                "InDrive", "Offre recommandée",
+                indrive_base, indrive_final,
+                distance_km, duration_min, 7,
+                events, scenarios, indrive_low, indrive_high
             ),
         ]
 
@@ -69,7 +56,6 @@ class OtherVTCScraper:
             price = 4900 + (d - 30) * 120
         else:
             price = 6100 + (d - 40) * 160
-
         return max(1500, self._round(price))
 
     def _detect_events(self) -> List[Dict[str, Any]]:
@@ -103,6 +89,30 @@ class OtherVTCScraper:
 
         return events
 
+    def _get_scenarios(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "label": "Heure de pointe matin",
+                "impact_percent": 18,
+                "reason": "Si la course est demandée entre 7h et 9h"
+            },
+            {
+                "label": "Heure de pointe soir",
+                "impact_percent": 22,
+                "reason": "Si la course est demandée entre 17h et 19h"
+            },
+            {
+                "label": "Tarif de nuit",
+                "impact_percent": 12,
+                "reason": "Si la course est demandée entre 22h et 5h"
+            },
+            {
+                "label": "Demande modérée",
+                "impact_percent": 8,
+                "reason": "Si la course est demandée en début/fin de pointe"
+            },
+        ]
+
     def _apply_events(self, base_price: int, events: List[Dict[str, Any]]) -> int:
         total_impact = sum(e["impact_percent"] for e in events)
         multiplier = 1 + (total_impact / 100)
@@ -127,9 +137,13 @@ class OtherVTCScraper:
         duration_min: float,
         eta: int,
         events: List[Dict[str, Any]],
+        scenarios: List[Dict[str, Any]],
         price_min: Optional[int] = None,
         price_max: Optional[int] = None,
     ) -> Dict[str, Any]:
+
+        max_impact = max((s["impact_percent"] for s in scenarios), default=0)
+        potential_price = self._round(base_price * (1 + max_impact / 100))
 
         item = {
             "provider": provider,
@@ -145,6 +159,12 @@ class OtherVTCScraper:
                 "base_price": base_price,
                 "final_price": final_price,
                 "events_detected": events,
+                "scenarios": scenarios,
+                "combined_scenario": {
+                    "max_impact_percent": max_impact,
+                    "normal_price": final_price,
+                    "potential_price": max(final_price, potential_price),
+                },
             },
         }
 
