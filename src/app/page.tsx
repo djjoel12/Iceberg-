@@ -126,7 +126,7 @@ export default function Home() {
     
     try {
       const resp = await fetch(
-  `/api/compare?start_lat=\( {start.lat}&start_lng= \){start.lng}&end_lat=\( {end.lat}&end_lng= \){end.lng}`
+  `/api/compare?start_lat=${start.lat}&start_lng=${start.lng}&end_lat=${end.lat}&end_lng=${end.lng}`
 );
 
       if (!resp.ok) {
