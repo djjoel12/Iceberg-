@@ -1,5 +1,5 @@
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class OtherVTCScraper:
@@ -59,8 +59,8 @@ class OtherVTCScraper:
         return max(1500, self._round(price))
 
     def _detect_events(self) -> List[Dict[str, Any]]:
-        hour = 22  # ← FORCÉ À 22H
-        # hour = datetime.now().hour  # ← Commenté pour test
+        """Événements RÉELS et ACTIFS maintenant."""
+        hour = datetime.now(timezone.utc).hour  # ← UTC = Abidjan
         events = []
 
         if hour in [7, 8, 9]:
@@ -157,10 +157,8 @@ class OtherVTCScraper:
             "is_estimate": True,
             "price_source": "iceberg_model_v1",
             "price_analysis": {
-                "base_price": base_price,
-                "final_price": final_price,
-                "events_detected": events,
-                "scenarios": scenarios,
+                "events_detected": events,  # ← Événements réels
+                "scenarios": scenarios,      # ← Scénarios possibles
                 "combined_scenario": {
                     "max_impact_percent": max_impact,
                     "normal_price": final_price,
