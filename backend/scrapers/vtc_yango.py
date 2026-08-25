@@ -16,55 +16,27 @@ class YangoScraper:
         if distance_km <= 0 or duration_min <= 0:
             return []
 
-        eco = self._estimate_eco(distance_km)
-        low, high = self._price_range(eco)
+        base_eco = self._estimate_eco(distance_km)
+        events = self._detect_events()
+        final_eco = self._apply_events(base_eco, events)
+        low, high = self._price_range(final_eco)
 
-        combo = max(1100, self._round(eco * 0.80))
-        confort = max(1600, self._round(eco * 1.12))
-        confort_plus = max(2000, self._round(eco * 1.28))
+        combo_base = self._round(base_eco * 0.80)
+        confort_base = self._round(base_eco * 1.12)
+        confort_plus_base = self._round(base_eco * 1.28)
+
+        combo = self._apply_events(combo_base, events)
+        confort = self._apply_events(confort_base, events)
+        confort_plus = self._apply_events(confort_plus_base, events)
 
         return [
-            self._item(
-                provider="Yango",
-                category="Combo",
-                price=combo,
-                distance_km=distance_km,
-                duration_min=duration_min,
-                eta=5,
-            ),
-            self._item(
-                provider="Yango",
-                category="Éco",
-                price=eco,
-                distance_km=distance_km,
-                duration_min=duration_min,
-                eta=4,
-                price_min=low,
-                price_max=high,
-            ),
-            self._item(
-                provider="Yango",
-                category="Confort",
-                price=confort,
-                distance_km=distance_km,
-                duration_min=duration_min,
-                eta=5,
-            ),
-            self._item(
-                provider="Yango",
-                category="Confort+",
-                price=confort_plus,
-                distance_km=distance_km,
-                duration_min=duration_min,
-                eta=8,
-            ),
+            self._item("Yango", "Combo", combo_base, combo, distance_km, duration_min, 5, events),
+            self._item("Yango", "Éco", base_eco, final_eco, distance_km, duration_min, 4, events, low, high),
+            self._item("Yango", "Confort", confort_base, confort, distance_km, duration_min, 5, events),
+            self._item("Yango", "Confort+", confort_plus_base, confort_plus, distance_km, duration_min, 8, events),
         ]
 
     def _estimate_eco(self, d: float) -> int:
-        """
-        Formule ICEBERG V1 — calibrée sur observations Yango Abidjan.
-        Paliers car le prix/km diminue avec la distance.
-        """
         if d <= 5:
             price = 1500 + (d - 3) * 150
         elif d <= 10:
@@ -76,13 +48,47 @@ class YangoScraper:
         elif d <= 40:
             price = 4900 + (d - 30) * 120
         else:
-            # Longues distances (ex: Dabou → Abidjan)
             price = 6100 + (d - 40) * 160
 
         return max(1500, self._round(price))
 
+    def _detect_events(self) -> List[Dict[str, Any]]:
+        hour = datetime.now().hour
+        events = []
+
+        if hour in [7, 8, 9]:
+            events.append({
+                "label": "Heure de pointe (matin)",
+                "impact_percent": 20,
+                "reason": "Forte demande entre 7h et 9h"
+            })
+        elif hour in [17, 18, 19]:
+            events.append({
+                "label": "Heure de pointe (soir)",
+                "impact_percent": 25,
+                "reason": "Forte demande entre 17h et 19h"
+            })
+        elif hour in [6, 10, 16, 20]:
+            events.append({
+                "label": "Demande modérée",
+                "impact_percent": 10,
+                "reason": "Légère hausse de la demande"
+            })
+        elif hour >= 22 or hour <= 5:
+            events.append({
+                "label": "Tarif de nuit",
+                "impact_percent": 15,
+                "reason": "Tarification nocturne"
+            })
+
+        return events
+
+    def _apply_events(self, base_price: int, events: List[Dict[str, Any]]) -> int:
+        total_impact = sum(e["impact_percent"] for e in events)
+        multiplier = 1 + (total_impact / 100)
+        return max(1500, self._round(base_price * multiplier))
+
     def _price_range(self, base: int) -> tuple:
-        """Fourchette ±8 % autour du prix central."""
         margin = 0.08
         low = max(1500, self._round(base * (1 - margin)))
         high = self._round(base * (1 + margin))
@@ -95,10 +101,12 @@ class YangoScraper:
         self,
         provider: str,
         category: str,
-        price: int,
+        base_price: int,
+        final_price: int,
         distance_km: float,
         duration_min: float,
         eta: int,
+        events: List[Dict[str, Any]],
         price_min: Optional[int] = None,
         price_max: Optional[int] = None,
     ) -> Dict[str, Any]:
@@ -106,13 +114,18 @@ class YangoScraper:
         item = {
             "provider": provider,
             "category": category,
-            "price": price,
+            "price": final_price,
             "currency": "XOF",
             "eta_minutes": eta,
             "distance_km": round(distance_km, 1),
             "duration_min": round(duration_min, 0),
             "is_estimate": True,
             "price_source": "iceberg_model_v1",
+            "price_analysis": {
+                "base_price": base_price,
+                "final_price": final_price,
+                "events_detected": events,
+            },
         }
 
         if price_min is not None and price_max is not None:
