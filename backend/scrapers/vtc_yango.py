@@ -18,6 +18,7 @@ class YangoScraper:
 
         base_eco = self._estimate_eco(distance_km)
         events = self._detect_events()
+        scenarios = self._get_scenarios()
         final_eco = self._apply_events(base_eco, events)
         low, high = self._price_range(final_eco)
 
@@ -30,10 +31,10 @@ class YangoScraper:
         confort_plus = self._apply_events(confort_plus_base, events)
 
         return [
-            self._item("Yango", "Combo", combo_base, combo, distance_km, duration_min, 5, events),
-            self._item("Yango", "Éco", base_eco, final_eco, distance_km, duration_min, 4, events, low, high),
-            self._item("Yango", "Confort", confort_base, confort, distance_km, duration_min, 5, events),
-            self._item("Yango", "Confort+", confort_plus_base, confort_plus, distance_km, duration_min, 8, events),
+            self._item("Yango", "Combo", combo_base, combo, distance_km, duration_min, 5, events, scenarios),
+            self._item("Yango", "Éco", base_eco, final_eco, distance_km, duration_min, 4, events, scenarios, low, high),
+            self._item("Yango", "Confort", confort_base, confort, distance_km, duration_min, 5, events, scenarios),
+            self._item("Yango", "Confort+", confort_plus_base, confort_plus, distance_km, duration_min, 8, events, scenarios),
         ]
 
     def _estimate_eco(self, d: float) -> int:
@@ -49,10 +50,10 @@ class YangoScraper:
             price = 4900 + (d - 30) * 120
         else:
             price = 6100 + (d - 40) * 160
-
         return max(1500, self._round(price))
 
     def _detect_events(self) -> List[Dict[str, Any]]:
+        """Événements ACTIFS maintenant."""
         hour = datetime.now().hour
         events = []
 
@@ -83,6 +84,31 @@ class YangoScraper:
 
         return events
 
+    def _get_scenarios(self) -> List[Dict[str, Any]]:
+        """Scénarios POSSIBLES (toujours envoyés)."""
+        return [
+            {
+                "label": "Heure de pointe matin",
+                "impact_percent": 20,
+                "reason": "Si la course est demandée entre 7h et 9h"
+            },
+            {
+                "label": "Heure de pointe soir",
+                "impact_percent": 25,
+                "reason": "Si la course est demandée entre 17h et 19h"
+            },
+            {
+                "label": "Tarif de nuit",
+                "impact_percent": 15,
+                "reason": "Si la course est demandée entre 22h et 5h"
+            },
+            {
+                "label": "Demande modérée",
+                "impact_percent": 10,
+                "reason": "Si la course est demandée en début/fin de pointe"
+            },
+        ]
+
     def _apply_events(self, base_price: int, events: List[Dict[str, Any]]) -> int:
         total_impact = sum(e["impact_percent"] for e in events)
         multiplier = 1 + (total_impact / 100)
@@ -107,9 +133,13 @@ class YangoScraper:
         duration_min: float,
         eta: int,
         events: List[Dict[str, Any]],
+        scenarios: List[Dict[str, Any]],
         price_min: Optional[int] = None,
         price_max: Optional[int] = None,
     ) -> Dict[str, Any]:
+
+        max_impact = max((s["impact_percent"] for s in scenarios), default=0)
+        potential_price = self._round(base_price * (1 + max_impact / 100))
 
         item = {
             "provider": provider,
@@ -125,6 +155,12 @@ class YangoScraper:
                 "base_price": base_price,
                 "final_price": final_price,
                 "events_detected": events,
+                "scenarios": scenarios,
+                "combined_scenario": {
+                    "max_impact_percent": max_impact,
+                    "normal_price": final_price,
+                    "potential_price": max(final_price, potential_price),
+                },
             },
         }
 
