@@ -1,30 +1,35 @@
+/* =========================================================
+   ICEBERG COMPARAISON VTC - THEME NOIR, JAUNE & BLANC
+========================================================= */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --primary: #111111;
-  --primary-hover: #000000;
+  /* FOND PRINCIPAL DE L'APPLICATION (DOMINANTE 1) */
+  --bg: #0A0A0A;              /* Noir profond pour le fond de l'écran */
+  --card: #161616;            /* Noir de carte pour détacher les éléments */
+  --border: #222222;          /* Bordures sombres très subtiles */
 
-  --accent: #F5C518;
-  --accent-hover: #EAB308;
+  /* TEXTES ET CONTRASTES (DOMINANTE 2) */
+  --text: #FFFFFF;            /* Blanc pur pour les titres et montants principaux */
+  --text-secondary: #A3A3A3;  /* Gris clair pour les sous-titres et petites infos */
+  --text-muted: #64748B;      /* Gris neutre pour les libellés secondaires */
 
+  /* COULEUR D'ACCENTUATION ET D'ACTION (DOMINANTE 3) */
+  --accent: #F5C518;          /* Jaune VTC pour les badges de tête et boutons */
+  --accent-hover: #EAB308;    /* Jaune plus chaud au survol */
+  --primary: #F5C518;
+  --primary-hover: #EAB308;
+
+  /* STATUTS & ALERTES ADAPTÉS AU MODE SOMBRE */
   --success: #10B981;
-  --success-bg: #ECFDF5;
-  --success-text: #065F46;
-
-  --bg: #F5F6F8;
-  --card: #FFFFFF;
-
-  --text: #111111;
-  --text-secondary: #64748B;
-  --text-muted: #94A3B8;
-
-  --border: #E5E7EB;
+  --success-bg: rgba(16, 185, 129, 0.12);
+  --success-text: #34D399;
 
   --error: #EF4444;
-  --error-bg: #FEF2F2;
+  --error-bg: rgba(239, 68, 68, 0.12);
 
   --warning: #F59E0B;
-  --warning-bg: #FFFBEB;
+  --warning-bg: rgba(245, 158, 11, 0.12);
 
   --radius: 20px;
 }
@@ -38,6 +43,7 @@
 html,
 body {
   min-height: 100%;
+  background: var(--bg);
 }
 
 body {
@@ -60,7 +66,7 @@ button {
 }
 
 /* =========================================================
-   PAGE
+   PAGE & CONTAINER
 ========================================================= */
 
 .page {
@@ -80,9 +86,10 @@ button {
 ========================================================= */
 
 .header {
-  background: var(--primary);
+  background: #000000;
   color: white;
   padding: 22px 16px;
+  border-bottom: 1px solid var(--border);
 }
 
 .header-inner {
@@ -101,12 +108,13 @@ button {
   font-size: 1.8rem;
   font-weight: 800;
   letter-spacing: -0.04em;
+  color: var(--text);
 }
 
 .header-badge {
-  background: rgba(245, 197, 24, 0.14);
+  background: rgba(245, 197, 24, 0.15);
   color: var(--accent);
-  border: 1px solid rgba(245, 197, 24, 0.25);
+  border: 1px solid rgba(245, 197, 24, 0.3);
   padding: 5px 10px;
   border-radius: 999px;
   font-size: 0.7rem;
@@ -115,27 +123,28 @@ button {
 
 .header p {
   margin-top: 5px;
-  color: #A3A3A3;
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
 /* =========================================================
-   SEARCH CARD
+   SEARCH CARD (BLOC DE RECHERCHE DÉPART/ARRIVÉE)
 ========================================================= */
 
 .search-card {
-  background: white;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 24px;
   padding: 18px;
   margin-top: 16px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
 .search-title {
   font-size: 1rem;
   font-weight: 800;
   margin-bottom: 16px;
+  color: var(--text);
 }
 
 .input-group {
@@ -159,16 +168,16 @@ button {
   gap: 12px;
   min-height: 58px;
   padding: 10px 14px;
-  background: #F8FAFC;
+  background: #1A1A1A;
   border: 1px solid var(--border);
   border-radius: 15px;
   transition: 0.2s ease;
 }
 
 .input-wrapper:focus-within {
-  background: white;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 4px rgba(17, 17, 17, 0.06);
+  background: #222222;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(245, 197, 24, 0.15);
 }
 
 .input-wrapper input {
@@ -183,7 +192,7 @@ button {
 }
 
 .input-wrapper input::placeholder {
-  color: var(--text-muted);
+  color: #555555;
   font-weight: 500;
 }
 
@@ -199,17 +208,17 @@ button {
 }
 
 .input-icon.start {
-  background: #DCFCE7;
-  color: #166534;
+  background: rgba(22, 101, 52, 0.3);
+  color: #4ade80;
 }
 
 .input-icon.end {
-  background: #FEE2E2;
-  color: #991B1B;
+  background: rgba(153, 27, 27, 0.3);
+  color: #fca5a5;
 }
 
 /* =========================================================
-   SUGGESTIONS
+   SUGGESTIONS D'ADRESSES
 ========================================================= */
 
 .suggestions {
@@ -221,16 +230,17 @@ button {
   overflow: hidden;
   max-height: 230px;
   overflow-y: auto;
-  background: white;
+  background: #1A1A1A;
   border: 1px solid var(--border);
   border-radius: 15px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
 }
 
 .suggestion-item {
   padding: 13px 15px;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid var(--border);
   font-size: 0.85rem;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -239,11 +249,12 @@ button {
 }
 
 .suggestion-item:hover {
-  background: #F8FAFC;
+  background: #242424;
+  color: var(--text);
 }
 
 /* =========================================================
-   MAP SELECT BUTTONS
+   BOUTONS DE SÉLECTION DU TRAJET
 ========================================================= */
 
 .select-btns {
@@ -256,24 +267,27 @@ button {
 .select-btn {
   padding: 10px;
   border-radius: 12px;
-  background: #F1F5F9;
+  background: #1A1A1A;
   color: var(--text-secondary);
   font-size: 0.75rem;
   font-weight: 700;
+  border: 1px solid var(--border);
 }
 
 .select-btn.active-start {
   background: #059669;
   color: white;
+  border-color: #059669;
 }
 
 .select-btn.active-end {
   background: #DC2626;
   color: white;
+  border-color: #DC2626;
 }
 
 /* =========================================================
-   PRIMARY BUTTON
+   BOUTON PRINCIPAL (COMPARER LES PRIX)
 ========================================================= */
 
 .btn-primary {
@@ -282,10 +296,11 @@ button {
   padding: 15px;
   border-radius: 15px;
   background: var(--accent);
-  color: #111111;
+  color: #000000;
   font-size: 0.95rem;
   font-weight: 800;
   transition: 0.2s ease;
+  box-shadow: 0 4px 15px rgba(245, 197, 24, 0.2);
 }
 
 .btn-primary:hover {
@@ -298,22 +313,25 @@ button {
 }
 
 .btn-primary:disabled {
-  opacity: 0.55;
+  opacity: 0.4;
+  background: #333333;
+  color: #666666;
+  box-shadow: none;
   cursor: not-allowed;
 }
 
 /* =========================================================
-   MAP
+   CARTE MAP
 ========================================================= */
 
 .map-card {
   position: relative;
   overflow: hidden;
   margin-top: 16px;
-  background: white;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 24px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
 }
 
 .map-card > * {
@@ -321,7 +339,7 @@ button {
 }
 
 /* =========================================================
-   ERROR
+   BLOC D'ERREUR
 ========================================================= */
 
 .error-box {
@@ -329,14 +347,14 @@ button {
   padding: 13px 15px;
   border-radius: 13px;
   background: var(--error-bg);
-  border: 1px solid #FECACA;
+  border: 1px solid rgba(239, 68, 68, 0.3);
   color: var(--error);
   font-size: 0.82rem;
   font-weight: 600;
 }
 
 /* =========================================================
-   RESULTS HEADER
+   ENTÊTE DES RÉSULTATS
 ========================================================= */
 
 .results-header {
@@ -351,6 +369,7 @@ button {
   font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.03em;
+  color: var(--text);
 }
 
 .results-subtitle {
@@ -360,7 +379,7 @@ button {
 }
 
 /* =========================================================
-   ROUTE SUMMARY
+   RÉSUMÉ DE LA ROUTE (DISTANCE & DURÉE)
 ========================================================= */
 
 .route-summary {
@@ -372,7 +391,7 @@ button {
 
 .route-stat {
   padding: 15px;
-  background: white;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 17px;
 }
@@ -388,10 +407,11 @@ button {
   margin-top: 3px;
   font-size: 1.15rem;
   font-weight: 800;
+  color: var(--text);
 }
 
 /* =========================================================
-   BEST OFFER
+   ENCADRÉ "MEILLEURE OFFRE" EN HAUT (STYLE NOIR & JAUNE INTENSE)
 ========================================================= */
 
 .best-card {
@@ -400,9 +420,10 @@ button {
   padding: 20px;
   margin-bottom: 16px;
   border-radius: 22px;
-  background: var(--primary);
+  background: #111111;
+  border: 2px solid var(--accent);
   color: white;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 12px 35px rgba(245, 197, 24, 0.12);
 }
 
 .best-card::after {
@@ -413,11 +434,11 @@ button {
   right: -60px;
   top: -60px;
   border-radius: 50%;
-  background: rgba(245, 197, 24, 0.08);
+  background: rgba(245, 197, 24, 0.05);
 }
 
 .best-label {
-  color: #A3A3A3;
+  color: var(--accent);
   font-size: 0.7rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -432,7 +453,7 @@ button {
 
 .best-price {
   margin-top: 3px;
-  color: var(--accent);
+  color: var(--text);
   font-size: 2.3rem;
   line-height: 1;
   font-weight: 800;
@@ -449,32 +470,33 @@ button {
 .best-meta span {
   padding: 6px 9px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   color: #D4D4D4;
   font-size: 0.7rem;
   font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.05);
 }
 
 .best-saving {
   margin-top: 15px;
   padding-top: 13px;
-  border-top: 1px solid rgba(255,255,255,0.1);
-  color: #D1FAE5;
+  border-top: 1px solid #222222;
+  color: #34D399;
   font-size: 0.78rem;
   font-weight: 700;
 }
 
 /* =========================================================
-   OFFER CARD
+   CARTES DES OFFRES DISPONIBLES (LISTE COMPARATIVE)
 ========================================================= */
 
 .offer-card {
   overflow: hidden;
   margin-bottom: 12px;
-  background: white;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 19px;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.035);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .offer-header {
@@ -488,6 +510,7 @@ button {
 .offer-provider {
   font-size: 0.98rem;
   font-weight: 800;
+  color: var(--text);
 }
 
 .offer-category {
@@ -503,6 +526,7 @@ button {
 .offer-price .amount {
   font-size: 1.25rem;
   font-weight: 800;
+  color: var(--text);
 }
 
 .offer-price .currency {
@@ -518,7 +542,7 @@ button {
   padding: 4px 9px;
   border-radius: 999px;
   background: var(--accent);
-  color: #111111;
+  color: #000000;
   font-size: 0.65rem;
   font-weight: 800;
 }
@@ -528,14 +552,14 @@ button {
   flex-wrap: wrap;
   gap: 14px;
   padding: 11px 16px;
-  border-top: 1px solid #F1F5F9;
-  border-bottom: 1px solid #F1F5F9;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
   font-size: 0.72rem;
 }
 
 /* =========================================================
-   WHY PRICE
+   BOUTON ACCORDÉON (POURQUOI CE PRIX ?)
 ========================================================= */
 
 .btn-why {
@@ -544,15 +568,17 @@ button {
   align-items: center;
   width: 100%;
   padding: 13px 16px;
-  background: #FAFAFA;
-  color: var(--text);
+  background: #1A1A1A;
+  color: var(--text-secondary);
   text-align: left;
   font-size: 0.75rem;
   font-weight: 700;
+  border-top: 1px solid rgba(255,255,255,0.02);
 }
 
 .btn-why:hover {
-  background: #F1F5F9;
+  background: #222222;
+  color: var(--text);
 }
 
 .btn-why span:last-child {
@@ -560,12 +586,12 @@ button {
 }
 
 /* =========================================================
-   PRICE ANALYSIS
+   DESCRIPTIF DU COÛT / COMPOSITION DU PRIX
 ========================================================= */
 
 .price-analysis {
   padding: 16px;
-  background: #FCFCFC;
+  background: #121212;
   border-top: 1px solid var(--border);
 }
 
@@ -573,6 +599,7 @@ button {
   margin-bottom: 12px;
   font-size: 0.8rem;
   font-weight: 800;
+  color: var(--text);
 }
 
 .analysis-item {
@@ -581,7 +608,7 @@ button {
   align-items: center;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid #1A1A1A;
 }
 
 .analysis-item:last-child {
@@ -591,25 +618,26 @@ button {
 .analysis-event {
   font-size: 0.75rem;
   font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .analysis-impact {
   padding: 4px 8px;
   border-radius: 999px;
   background: var(--warning-bg);
-  color: #92400E;
+  color: #FBBF24;
   font-size: 0.65rem;
   font-weight: 800;
 }
 
 .analysis-price {
   margin-top: 2px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: 0.7rem;
 }
 
 /* =========================================================
-   DISCLAIMER
+   MENTIONS LÉGALES ET CREDIT DE PIED DE PAGE
 ========================================================= */
 
 .disclaimer {
@@ -621,13 +649,13 @@ button {
 }
 
 /* =========================================================
-   LOADING
+   CHARGEMENT DE LA RECHERCHE (SPINNER ANIMÉ)
 ========================================================= */
 
 .loading-card {
   padding: 30px 20px;
   margin-top: 16px;
-  background: white;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 20px;
   text-align: center;
@@ -637,7 +665,7 @@ button {
   width: 28px;
   height: 28px;
   margin: 0 auto 12px;
-  border: 3px solid #E5E7EB;
+  border: 3px solid #222222;
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -656,44 +684,36 @@ button {
 }
 
 /* =========================================================
-   RESPONSIVE
+   REGLES RESPONSIVES (ÉCRANS LARGES ET SUPPORTS MOBILES)
 ========================================================= */
 
 @media (min-width: 768px) {
-
   .header {
     padding: 26px 24px;
   }
-
   .container {
     padding-left: 24px;
     padding-right: 24px;
   }
-
   .search-card {
     padding: 22px;
   }
-
   .best-price {
     font-size: 2.6rem;
   }
 }
 
 @media (max-width: 380px) {
-
   .container {
     padding-left: 12px;
     padding-right: 12px;
   }
-
   .search-card {
     padding: 15px;
   }
-
   .best-price {
     font-size: 2rem;
   }
-
   .route-summary {
     gap: 7px;
   }
