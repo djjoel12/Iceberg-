@@ -1037,7 +1037,7 @@ export default function Home() {
       ====================================================== */}
 
       <footer className="mx-auto max-w-5xl px-4 pb-8 pt-4 text-center text-xs text-slate-400">
-        ICEBERG · Comparateur de transport à Abidjan
+        ICEBERG · Comparateur de transports à Abidjan
       </footer>
 
     </main>
