@@ -1,14 +1,20 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useEffect, useRef } from "react";
-import { searchPlaces, reverseGeocode, GeoResult } from "../lib/geocode";
+import { useEffect, useRef, useState } from "react";
+import {
+  searchPlaces,
+  reverseGeocode,
+  GeoResult,
+} from "../lib/geocode";
 
 const Map = dynamic(() => import("../components/Map"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[400px] items-center justify-center rounded-2xl bg-gray-200">
-      Chargement de la carte...
+    <div className="flex h-[420px] items-center justify-center bg-slate-100">
+      <div className="text-sm text-slate-500">
+        Chargement de la carte...
+      </div>
     </div>
   ),
 });
@@ -17,6 +23,58 @@ type Point = {
   lat: number;
   lng: number;
   name: string;
+};
+
+type EventItem = {
+  type?: string;
+  label?: string;
+  impact_percent?: number;
+  reason?: string;
+};
+
+type Scenario = {
+  event?: string;
+  impact_percent?: number;
+  price?: number;
+  currency?: string;
+  reason?: string;
+};
+
+type ResultItem = {
+  provider: string;
+  category: string;
+  price: number;
+  currency: string;
+  eta_minutes?: number;
+  recommendation?: boolean;
+  difference_from_cheapest_percent?: number;
+  confidence?: string;
+
+  price_analysis?: {
+    reference_price?: number;
+    currency?: string;
+    events_detected?: EventItem[];
+    scenarios?: Scenario[];
+
+    combined_scenario?: {
+      total_impact_percent?: number;
+      minimum_price?: number;
+      maximum_price?: number;
+      currency?: string;
+    };
+
+    message?: string;
+  };
+};
+
+type Route = {
+  id: number;
+  label: string;
+  distance_km: number;
+  duration_min: number;
+  geometry?: any;
+  is_shortest?: boolean;
+  is_fastest?: boolean;
 };
 
 export default function Home() {
@@ -35,64 +93,80 @@ export default function Home() {
 
   const [selecting, setSelecting] = useState<"start" | "end">("start");
   const [routeGeometry, setRouteGeometry] = useState<[number, number][]>([]);
-  
+  const [openDetails, setOpenDetails] = useState<number | null>(null);
+
+  // ============================================================
   // NOUVEAU : Gestion des 2 chemins
-  const [routes, setRoutes] = useState<any[]>([]);
+  // ============================================================
+
+  const [routes, setRoutes] = useState<Route[]>([]);
   const [selectedRouteId, setSelectedRouteId] = useState<number>(1);
 
   const startTimeout = useRef<NodeJS.Timeout | null>(null);
   const endTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // ============================================================
-  // RECHERCHE DÉPART
+  // RECHERCHE DEPART
   // ============================================================
 
   useEffect(() => {
-    if (startTimeout.current) clearTimeout(startTimeout.current);
+    if (startTimeout.current) {
+      clearTimeout(startTimeout.current);
+    }
+
     if (startQuery.length < 3) {
       setStartSuggestions([]);
       return;
     }
+
     startTimeout.current = setTimeout(async () => {
       try {
         const results = await searchPlaces(startQuery);
         setStartSuggestions(results);
-      } catch (err) {
-        console.error(err);
+      } catch {
         setStartSuggestions([]);
       }
     }, 400);
+
     return () => {
-      if (startTimeout.current) clearTimeout(startTimeout.current);
+      if (startTimeout.current) {
+        clearTimeout(startTimeout.current);
+      }
     };
   }, [startQuery]);
 
   // ============================================================
-  // RECHERCHE ARRIVÉE
+  // RECHERCHE ARRIVEE
   // ============================================================
 
   useEffect(() => {
-    if (endTimeout.current) clearTimeout(endTimeout.current);
+    if (endTimeout.current) {
+      clearTimeout(endTimeout.current);
+    }
+
     if (endQuery.length < 3) {
       setEndSuggestions([]);
       return;
     }
+
     endTimeout.current = setTimeout(async () => {
       try {
         const results = await searchPlaces(endQuery);
         setEndSuggestions(results);
-      } catch (err) {
-        console.error(err);
+      } catch {
         setEndSuggestions([]);
       }
     }, 400);
+
     return () => {
-      if (endTimeout.current) clearTimeout(endTimeout.current);
+      if (endTimeout.current) {
+        clearTimeout(endTimeout.current);
+      }
     };
   }, [endQuery]);
 
   // ============================================================
-  // SÉLECTIONS
+  // SELECTION DEPART
   // ============================================================
 
   function selectStart(place: GeoResult) {
@@ -101,10 +175,15 @@ export default function Home() {
       lng: place.lng,
       name: place.displayName,
     });
+
     setStartQuery(place.displayName);
     setStartSuggestions([]);
     setSelecting("end");
   }
+
+  // ============================================================
+  // SELECTION ARRIVEE
+  // ============================================================
 
   function selectEnd(place: GeoResult) {
     setEnd({
@@ -112,6 +191,7 @@ export default function Home() {
       lng: place.lng,
       name: place.displayName,
     });
+
     setEndQuery(place.displayName);
     setEndSuggestions([]);
   }
@@ -123,16 +203,46 @@ export default function Home() {
   async function handleMapClick(lat: number, lng: number) {
     try {
       const name = await reverseGeocode(lat, lng);
+
       if (selecting === "start") {
-        setStart({ lat, lng, name });
+        setStart({
+          lat,
+          lng,
+          name,
+        });
+
         setStartQuery(name);
         setSelecting("end");
       } else {
-        setEnd({ lat, lng, name });
+        setEnd({
+          lat,
+          lng,
+          name,
+        });
+
         setEndQuery(name);
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      const name = "Position sélectionnée";
+
+      if (selecting === "start") {
+        setStart({
+          lat,
+          lng,
+          name,
+        });
+
+        setStartQuery(name);
+        setSelecting("end");
+      } else {
+        setEnd({
+          lat,
+          lng,
+          name,
+        });
+
+        setEndQuery(name);
+      }
     }
   }
 
@@ -145,18 +255,26 @@ export default function Home() {
     setResult(null);
     setRouteGeometry([]);
     setRoutes([]);
+    setOpenDetails(null);
+    setSelectedRouteId(1);
 
     if (!start || !end) {
-      setError("Veuillez choisir un point de départ et une destination.");
+      setError("Veuillez choisir un départ et une destination.");
       return;
     }
 
     setLoading(true);
 
     try {
-      const resp = await fetch(
-        `/api/compare?start_lat=${start.lat}&start_lng=${start.lng}&end_lat=${end.lat}&end_lng=${end.lng}&route_id=${selectedRouteId}`
-      );
+      const params = new URLSearchParams({
+        start_lat: String(start.lat),
+        start_lng: String(start.lng),
+        end_lat: String(end.lat),
+        end_lng: String(end.lng),
+        route_id: String(selectedRouteId),
+      });
+
+      const resp = await fetch(`/api/compare?${params.toString()}`);
 
       if (!resp.ok) {
         const txt = await resp.text();
@@ -166,18 +284,16 @@ export default function Home() {
       const data = await resp.json();
 
       if (!data || !data.success) {
-        setError("Réponse invalide du serveur.");
-        setResult(data);
-        return;
+        throw new Error("Réponse invalide du serveur.");
       }
 
       setResult(data);
-      
+
       // Sauvegarde les chemins disponibles
       if (data.routes) {
         setRoutes(data.routes);
       }
-      
+
       // Sélectionne le chemin actif
       if (data.selected_route?.geometry?.coordinates) {
         const coords = data.selected_route.geometry.coordinates.map(
@@ -185,10 +301,9 @@ export default function Home() {
         );
         setRouteGeometry(coords);
       }
-      
     } catch (err: any) {
       console.error(err);
-      setError(err.message ?? "Erreur lors de l'appel API.");
+      setError(err?.message || "Impossible de récupérer les résultats.");
     } finally {
       setLoading(false);
     }
@@ -200,145 +315,234 @@ export default function Home() {
 
   async function selectRoute(routeId: number) {
     setSelectedRouteId(routeId);
-    
-    // Re-fait la comparaison avec le nouveau chemin
-    if (start && end) {
-      setLoading(true);
-      try {
-        const resp = await fetch(
-          `/api/compare?start_lat=${start.lat}&start_lng=${start.lng}&end_lat=${end.lat}&end_lng=${end.lng}&route_id=${routeId}`
-        );
-        const data = await resp.json();
-        
-        if (data.success) {
-          setResult(data);
-          
-          if (data.selected_route?.geometry?.coordinates) {
-            const coords = data.selected_route.geometry.coordinates.map(
-              (c: [number, number]) => [c[1], c[0]] as [number, number]
-            );
-            setRouteGeometry(coords);
-          }
+
+    if (!start || !end) return;
+
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        start_lat: String(start.lat),
+        start_lng: String(start.lng),
+        end_lat: String(end.lat),
+        end_lng: String(end.lng),
+        route_id: String(routeId),
+      });
+
+      const resp = await fetch(`/api/compare?${params.toString()}`);
+      const data = await resp.json();
+
+      if (data.success) {
+        setResult(data);
+
+        if (data.selected_route?.geometry?.coordinates) {
+          const coords = data.selected_route.geometry.coordinates.map(
+            (c: [number, number]) => [c[1], c[0]] as [number, number]
+          );
+          setRouteGeometry(coords);
         }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
       }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   }
 
+  // ============================================================
+  // RESET
+  // ============================================================
+
+  function resetSearch() {
+    setStart(null);
+    setEnd(null);
+    setStartQuery("");
+    setEndQuery("");
+    setStartSuggestions([]);
+    setEndSuggestions([]);
+    setResult(null);
+    setError(null);
+    setRouteGeometry([]);
+    setRoutes([]);
+    setOpenDetails(null);
+    setSelectedRouteId(1);
+    setSelecting("start");
+  }
+
+  const results: ResultItem[] = Array.isArray(result?.results) ? result.results : [];
+  const bestPrice = result?.best_price;
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-slate-50 text-slate-950">
 
       {/* ======================================================
           HEADER
       ====================================================== */}
 
-      <header className="bg-gray-950 px-5 py-6 text-white">
-        <h1 className="text-3xl font-bold tracking-wide">ICEBERG</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          Comparez les prix de transport à Abidjan
-        </p>
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950 text-white shadow-lg">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+
+          <div>
+            <div className="text-2xl font-black tracking-tight">
+              ICEBERG
+            </div>
+
+            <div className="text-xs text-slate-400">
+              Comparez avant de partir
+            </div>
+          </div>
+
+          {result && (
+            <button
+              onClick={resetSearch}
+              className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
+            >
+              Nouveau trajet
+            </button>
+          )}
+        </div>
       </header>
 
-      <section className="mx-auto max-w-3xl p-5">
+      <section className="mx-auto max-w-5xl px-4 py-5">
 
         {/* ====================================================
             FORMULAIRE
         ==================================================== */}
 
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
+        <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
 
-          {/* DÉPART */}
-          <div className="relative mb-4">
-            <label className="mb-2 block font-semibold">📍 Départ</label>
-            <input
-              value={startQuery}
-              onChange={(e) => setStartQuery(e.target.value)}
-              onFocus={() => setSelecting("start")}
-              type="text"
-              placeholder="Ex: Cocody Angré, Plateau..."
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 p-4 outline-none focus:border-gray-500"
-            />
-            {startSuggestions.length > 0 && (
-              <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-xl border bg-white shadow-lg">
-                {startSuggestions.map((s, i) => (
-                  <li
-                    key={i}
-                    onClick={() => selectStart(s)}
-                    className="cursor-pointer border-b px-4 py-3 text-sm last:border-0 hover:bg-gray-100"
-                  >
-                    {s.displayName}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <div className="p-4 sm:p-6">
 
-          {/* ARRIVÉE */}
-          <div className="relative mb-4">
-            <label className="mb-2 block font-semibold">🎯 Destination</label>
-            <input
-              value={endQuery}
-              onChange={(e) => setEndQuery(e.target.value)}
-              onFocus={() => setSelecting("end")}
-              type="text"
-              placeholder="Ex: Zone 4, Aéroport..."
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 p-4 outline-none focus:border-gray-500"
-            />
-            {endSuggestions.length > 0 && (
-              <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-xl border bg-white shadow-lg">
-                {endSuggestions.map((s, i) => (
-                  <li
-                    key={i}
-                    onClick={() => selectEnd(s)}
-                    className="cursor-pointer border-b px-4 py-3 text-sm last:border-0 hover:bg-gray-100"
-                  >
-                    {s.displayName}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+            {/* DEPART */}
 
-          {/* SÉLECTION CARTE */}
-          <div className="mb-4 flex gap-2 text-sm">
-            <button
-              type="button"
-              onClick={() => setSelecting("start")}
-              className={`flex-1 rounded-lg px-3 py-2 ${
-                selecting === "start" ? "bg-green-600 text-white" : "bg-gray-100"
-              }`}
-            >
-              Cliquer départ
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelecting("end")}
-              className={`flex-1 rounded-lg px-3 py-2 ${
-                selecting === "end" ? "bg-red-600 text-white" : "bg-gray-100"
-              }`}
-            >
-              Cliquer arrivée
-            </button>
-          </div>
+            <div className="relative mb-3">
 
-          {/* BOUTON */}
-          <button
-            onClick={compare}
-            disabled={loading}
-            className="w-full rounded-xl bg-gray-950 p-4 font-bold text-white transition hover:bg-gray-800 disabled:opacity-60"
-          >
-            {loading ? "Comparaison..." : "Comparer les prix"}
-          </button>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                Départ
+              </label>
 
-          {/* ERREUR */}
-          {error && (
-            <div className="mt-4 rounded-xl bg-red-50 p-4 font-medium text-red-600">
-              {error}
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-slate-900 focus-within:bg-white">
+
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                  📍
+                </div>
+
+                <input
+                  value={startQuery}
+                  onChange={(e) => setStartQuery(e.target.value)}
+                  onFocus={() => setSelecting("start")}
+                  type="text"
+                  placeholder="Où partez-vous ?"
+                  className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-slate-400"
+                />
+
+              </div>
+
+              {startSuggestions.length > 0 && (
+                <ul className="absolute left-0 right-0 z-40 mt-2 max-h-56 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
+                  {startSuggestions.map((s, i) => (
+                    <li
+                      key={i}
+                      onClick={() => selectStart(s)}
+                      className="cursor-pointer border-b border-slate-100 px-4 py-3 text-sm last:border-0 hover:bg-slate-50"
+                    >
+                      {s.displayName}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-          )}
+
+            {/* DESTINATION */}
+
+            <div className="relative mb-4">
+
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                Destination
+              </label>
+
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-slate-900 focus-within:bg-white">
+
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700">
+                  🎯
+                </div>
+
+                <input
+                  value={endQuery}
+                  onChange={(e) => setEndQuery(e.target.value)}
+                  onFocus={() => setSelecting("end")}
+                  type="text"
+                  placeholder="Où allez-vous ?"
+                  className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-slate-400"
+                />
+
+              </div>
+
+              {endSuggestions.length > 0 && (
+                <ul className="absolute left-0 right-0 z-40 mt-2 max-h-56 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
+                  {endSuggestions.map((s, i) => (
+                    <li
+                      key={i}
+                      onClick={() => selectEnd(s)}
+                      className="cursor-pointer border-b border-slate-100 px-4 py-3 text-sm last:border-0 hover:bg-slate-50"
+                    >
+                      {s.displayName}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* MODE CARTE */}
+
+            <div className="mb-4 grid grid-cols-2 gap-2">
+
+              <button
+                type="button"
+                onClick={() => setSelecting("start")}
+                className={`rounded-xl px-3 py-2.5 text-xs font-bold transition ${
+                  selecting === "start"
+                    ? "bg-emerald-600 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                📍 Choisir départ
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelecting("end")}
+                className={`rounded-xl px-3 py-2.5 text-xs font-bold transition ${
+                  selecting === "end"
+                    ? "bg-red-600 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                🎯 Choisir arrivée
+              </button>
+
+            </div>
+
+            {/* BOUTON */}
+
+            <button
+              onClick={compare}
+              disabled={loading}
+              className="w-full rounded-2xl bg-slate-950 px-5 py-4 text-sm font-black text-white shadow-lg transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Analyse du trajet..." : "Comparer les prix"}
+            </button>
+
+            {error && (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+                {error}
+              </div>
+            )}
+
+          </div>
 
         </div>
 
@@ -346,7 +550,7 @@ export default function Home() {
             CARTE
         ==================================================== */}
 
-        <div className="mt-5 overflow-hidden rounded-2xl shadow-sm">
+        <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
           <Map
             start={start}
             end={end}
@@ -360,252 +564,481 @@ export default function Home() {
         ==================================================== */}
 
         {routes.length > 1 && (
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            {routes.map((route) => (
-              <button
-                key={route.id}
-                onClick={() => selectRoute(route.id)}
-                className={`rounded-2xl border-2 p-4 text-left transition ${
-                  selectedRouteId === route.id
-                    ? "border-gray-950 bg-gray-100"
-                    : "border-gray-200 bg-white hover:border-gray-300"
-                }`}
-              >
-                <div className="font-bold">{route.label}</div>
-                <div className="text-sm text-gray-500">
-                  📏 {route.distance_km} km • ⏱ {route.duration_min} min
-                </div>
-                {route.is_shortest && (
-                  <span className="text-xs text-green-600">📍 Plus court</span>
-                )}
-                {route.is_fastest && (
-                  <span className="text-xs text-blue-600">⚡ Plus rapide</span>
-                )}
-              </button>
-            ))}
+          <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
+            <div className="p-4">
+              <div className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">
+                Choisissez votre itinéraire
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {routes.map((route) => (
+                  <button
+                    key={route.id}
+                    onClick={() => selectRoute(route.id)}
+                    className={`rounded-2xl border-2 p-4 text-left transition ${
+                      selectedRouteId === route.id
+                        ? "border-slate-900 bg-slate-100"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="font-bold">{route.label}</div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      📏 {route.distance_km} km • ⏱ {route.duration_min} min
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      {route.is_shortest && (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                          📍 Plus court
+                        </span>
+                      )}
+                      {route.is_fastest && (
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                          ⚡ Plus rapide
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
         {/* ====================================================
-            RÉSULTATS
+            RESULTATS
         ==================================================== */}
 
         {result && (
           <div className="mt-6 space-y-5">
 
-            {/* RÉSUMÉ TRAJET */}
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-xl font-bold">Résultat du trajet</h2>
-              <div className="space-y-2 text-sm">
-                <div><strong>📍 Départ :</strong> {start?.name}</div>
-                <div><strong>🎯 Arrivée :</strong> {end?.name}</div>
+            {/* TRAJET */}
+
+            <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+
+              <div className="mb-4 flex items-center justify-between">
+
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                    Votre trajet
+                  </div>
+
+                  <h2 className="mt-1 text-lg font-black">
+                    Comparaison des prix
+                  </h2>
+                </div>
+
               </div>
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500">Distance</div>
-                  <div className="mt-1 text-lg font-bold">
+
+              <div className="grid grid-cols-2 gap-3">
+
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className="text-xs text-slate-500">Distance</div>
+                  <div className="mt-1 text-xl font-black">
                     {result.route?.distance_km ?? "—"} km
                   </div>
                 </div>
-                <div className="rounded-xl bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500">Durée</div>
-                  <div className="mt-1 text-lg font-bold">
+
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className="text-xs text-slate-500">Durée</div>
+                  <div className="mt-1 text-xl font-black">
                     {result.route?.duration_min ?? "—"} min
                   </div>
                 </div>
+
               </div>
+
+              <div className="mt-4 space-y-2 text-xs text-slate-500">
+
+                <div className="flex gap-2">
+                  <span>📍</span>
+                  <span className="line-clamp-2">{start?.name}</span>
+                </div>
+
+                <div className="flex gap-2">
+                  <span>🎯</span>
+                  <span className="line-clamp-2">{end?.name}</span>
+                </div>
+
+              </div>
+
             </div>
 
-            {/* MEILLEUR PRIX */}
-            <div className="rounded-2xl bg-gray-950 p-5 text-white shadow-sm">
-              <div className="text-sm text-gray-400">Meilleur prix estimé</div>
-              {result.best_price ? (
-                <>
-                  <div className="mt-2 text-2xl font-bold">
-                    {result.best_price.price} {result.best_price.currency}
-                  </div>
-                  <div className="mt-1 text-sm text-gray-300">
-                    {result.best_price.provider} — {result.best_price.category}
-                  </div>
-                </>
-              ) : (
-                <div className="mt-2">Aucun résultat</div>
-              )}
-            </div>
+            
+            {/* =================================================
+                MEILLEUR PRIX
+            ================================================= */}
 
-            {/* OFFRES VTC */}
+            {bestPrice && (
+              <div className="overflow-hidden rounded-3xl bg-slate-950 p-5 text-white shadow-xl">
+
+                <div className="mb-4 flex items-center justify-between">
+
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-widest text-emerald-400">
+                      ⭐ Meilleure offre
+                    </div>
+
+                    <div className="mt-1 text-xl font-black">
+                      {bestPrice.provider}
+                    </div>
+
+                    <div className="text-sm text-slate-400">
+                      {bestPrice.category}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+
+                    <div className="text-3xl font-black">
+                      {bestPrice.price}
+                    </div>
+
+                    <div className="text-xs font-bold text-slate-400">
+                      {bestPrice.currency}
+                    </div>
+
+                  </div>
+
+                </div>
+
+                <div className="rounded-2xl bg-white/10 p-4 text-sm text-slate-300">
+                  ICEBERG recommande cette offre parmi les prix actuellement estimés.
+                </div>
+
+              </div>
+            )}
+
+            {/* =================================================
+                COMPARAISON
+            ================================================= */}
+
             <div>
-              <h2 className="mb-4 text-xl font-bold">Comparaison des services</h2>
-              <div className="space-y-5">
-                {Array.isArray(result.results) && result.results.length ? (
-                  result.results.map((r: any, i: number) => {
-                    const analysis = r.price_analysis;
-                    const events = analysis?.events_detected ?? [];
-                    const scenarios = analysis?.scenarios ?? [];
-                    const combined = analysis?.combined_scenario;
 
-                    return (
-                      <div key={i} className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-                        {/* EN-TÊTE SERVICE */}
-                        <div className="border-b p-5">
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="text-lg font-bold">{r.provider}</h3>
-                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">
-                                  {r.category}
-                                </span>
-                                {r.recommendation && (
-                                  <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">
-                                    ⭐ Recommandé
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-2 text-sm text-gray-500">
-                                🕐 Chauffeur disponible : {r.eta_minutes ?? "—"} min
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-2xl font-bold">
-                                {r.price} {r.currency}
-                              </div>
-                              {r.difference_from_cheapest_percent !== undefined && (
-                                <div className="text-sm text-gray-500">
-                                  +{r.difference_from_cheapest_percent}%
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+              <div className="mb-3 px-1">
 
-                        {/* TRAJET */}
-                        <div className="border-b p-5">
-                          <h4 className="mb-3 font-semibold">🚗 Trajet</h4>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="rounded-xl bg-gray-50 p-3">
-                              <div className="text-xs text-gray-500">Distance</div>
-                              <div className="font-semibold">
-                                {result.route?.distance_km ?? "—"} km
-                              </div>
-                            </div>
-                            <div className="rounded-xl bg-gray-50 p-3">
-                              <div className="text-xs text-gray-500">Durée</div>
-                              <div className="font-semibold">
-                                {result.route?.duration_min ?? "—"} min
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                <div className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                  Comparaison
+                </div>
 
-                        {/* ÉVÉNEMENTS DÉTECTÉS */}
-                        <div className="border-b p-5">
-                          <h4 className="mb-3 font-semibold">📊 Éléments pouvant influencer le prix</h4>
-                          {events.length > 0 ? (
-                            <div className="space-y-3">
-                              {events.map((event: any, eventIndex: number) => (
-                                <div key={eventIndex} className="rounded-xl bg-gray-50 p-4">
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="font-medium">{event.label}</div>
-                                    <div className="font-bold text-orange-600">
-                                      +{event.impact_percent}%
-                                    </div>
-                                  </div>
-                                  {event.reason && (
-                                    <div className="mt-1 text-sm text-gray-500">
-                                      {event.reason}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="rounded-xl bg-green-50 p-4 text-sm text-green-700">
-                              Aucun événement particulier détecté. Le prix affiché correspond aux conditions normales estimées.
-                            </div>
-                          )}
-                        </div>
+                <h2 className="mt-1 text-xl font-black">
+                  Les offres disponibles
+                </h2>
 
-                        {/* SCÉNARIOS */}
-                        <div className="border-b p-5">
-                          <h4 className="mb-3 font-semibold">🔮 Si ces événements se produisent</h4>
-                          {scenarios.length > 0 ? (
-                            <div className="space-y-3">
-                              {scenarios.map((scenario: any, scenarioIndex: number) => (
-                                <div key={scenarioIndex} className="flex items-center justify-between rounded-xl border p-4">
-
-                                  <div>
-                                    <div className="font-medium">{scenario.event}</div>
-                                    <div className="text-sm text-gray-500">
-                                      Impact potentiel : +{scenario.impact_percent}%
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="font-bold">
-                                      {scenario.price} {scenario.currency}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-gray-500">Aucun scénario particulier.</div>
-                          )}
-                        </div>
-
-                        {/* SCÉNARIO COMBINÉ */}
-                        {combined && (
-                          <div className="border-b p-5">
-                            <h4 className="mb-3 font-semibold">📈 Scénario combiné</h4>
-                            <div className="rounded-xl bg-orange-50 p-4">
-                              <div className="text-sm text-gray-600">Impact maximal estimé :</div>
-                              <div className="mt-1 text-xl font-bold text-orange-700">
-                                +{combined.total_impact_percent}%
-                              </div>
-                              <div className="mt-4 grid grid-cols-2 gap-3">
-                                <div>
-                                  <div className="text-xs text-gray-500">Prix normal</div>
-                                  <div className="font-semibold">{combined.minimum_price} FCFA</div>
-                                </div>
-                                <div>
-                                  <div className="text-xs text-gray-500">Prix potentiel</div>
-                                  <div className="font-semibold">{combined.maximum_price} FCFA</div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* CONFIANCE */}
-                        <div className="p-5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-500">Niveau de confiance</span>
-                            <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
-                              {analysis?.confidence ?? r.confidence ?? "medium"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-            <div className="rounded-2xl bg-white p-5 text-gray-500 shadow-sm">
-                    Aucune offre disponible.
-                  </div>
-                )}
               </div>
+
+              <div className="space-y-3">
+
+                {results.map((r, i) => {
+
+                const analysis = r.price_analysis;
+                  const events = analysis?.events_detected || [];
+                  const scenarios = analysis?.scenarios || [];
+                  const combined = analysis?.combined_scenario;
+                  const isOpen = openDetails === i;
+
+                  return (
+                    <div
+                      key={`${r.provider}-${r.category}-${i}`}
+                      className={`overflow-hidden rounded-3xl bg-white shadow-sm ring-1 transition ${
+                        r.recommendation ? "ring-emerald-300" : "ring-slate-200"
+                      }`}
+                    >
+
+                      {/* CARTE PRINCIPALE */}
+
+                      <div className="p-4">
+
+                        <div className="flex items-start justify-between gap-4">
+
+                          <div className="min-w-0">
+
+                            <div className="flex flex-wrap items-center gap-2">
+
+                              <h3 className="font-black">
+                                {r.provider}
+                              </h3>
+
+                              {r.recommendation && (
+                                <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-black text-emerald-700">
+                                  MEILLEUR PRIX
+                                </span>
+                              )}
+
+                            </div>
+
+                            <div className="mt-1 text-sm text-slate-500">
+                              {r.category}
+                            </div>
+
+                            <div className="mt-3 flex flex-wrap gap-2">
+
+                              {r.eta_minutes != null && (
+                                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                                  🕐 {r.eta_minutes} min
+                                </span>
+                              )}
+
+                              {r.difference_from_cheapest_percent != null && (
+                                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                                  +{r.difference_from_cheapest_percent}% vs meilleur
+                                </span>
+                              )}
+
+                            </div>
+                              </div>
+
+                          <div className="shrink-0 text-right">
+
+                            <div className="text-2xl font-black">
+                              {r.price}
+                            </div>
+
+                            <div className="text-xs font-bold text-slate-400">
+                              {r.currency}
+                            </div>
+
+                          </div>
+
+                        </div>
+
+                        <button
+                          onClick={() => setOpenDetails(isOpen ? null : i)}
+                          className="mt-4 flex w-full items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold transition hover:bg-slate-100"
+                        >
+
+                          <span>
+                            {isOpen ? "Masquer les détails" : "Pourquoi ce prix ?"}
+                          </span>
+
+                          <span>{isOpen ? "⌃" : "⌄"}</span>
+
+                        </button>
+
+                      </div>
+
+                      {/* =================================================
+                          DETAILS
+                      ================================================= */}
+
+                      {isOpen && (
+                        <div className="border-t border-slate-100 bg-slate-50 p-4">
+
+                          {/* TRAJET */}
+
+                          <div className="mb-5">
+
+                            <div className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">
+                              Données du trajet
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+
+                              <div className="rounded-2xl bg-white p-3">
+                                <div className="text-xs text-slate-400">Distance</div>
+                                <div className="mt-1 font-black">
+                                  {result.route?.distance_km} km
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl bg-white p-3">
+                                <div className="text-xs text-slate-400">Durée</div>
+                                <div className="mt-1 font-black">
+                                  {result.route?.duration_min} min
+                                </div>
+                              </div>
+
+                            </div>
+                            </div>
+
+                          {/* FACTEURS */}
+
+                          <div className="mb-5">
+
+                            <div className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">
+                              Éléments détectés
+                            </div>
+
+                            {events.length > 0 ? (
+
+                              <div className="space-y-2">
+
+                                {events.map((event, eventIndex) => (
+                                  <div key={eventIndex} className="rounded-2xl bg-white p-4">
+
+                                    <div className="flex items-center justify-between gap-3">
+
+                                      <div className="font-bold">
+                                        {event.label}
+                                      </div>
+
+                                      <div className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700">
+                                        +{event.impact_percent}%
+                                      </div>
+
+                                    </div>
+
+                                    {event.reason && (
+                                      <div className="mt-2 text-xs leading-5 text-slate-500">
+                                        {event.reason}
+                                      </div>
+                                    )}
+
+                                  </div>
+                                ))}
+
+                              </div>
+
+                            ) : (
+
+                              <div className="rounded-2xl bg-white p-4 text-sm text-slate-500">
+                                Aucun événement particulier détecté.
+                              </div>
+
+                            )}
+
+                          </div>
+
+                          {/* SCENARIOS */}
+
+                          {scenarios.length > 0 && (
+                            <div className="mb-5">
+
+                              <div className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">
+                                Si ces événements se produisent
+                              </div>
+
+                              <div className="space-y-2">
+
+
+                                {scenarios.map((scenario, scenarioIndex) => (
+                                  <div
+                                    key={scenarioIndex}
+                                    className="flex items-center justify-between rounded-2xl bg-white p-4"
+                                  >
+
+                                    <div>
+                                      <div className="text-sm font-bold">
+                                        {scenario.event}
+                                      </div>
+
+                                      <div className="mt-1 text-xs text-slate-400">
+                                        +{scenario.impact_percent}%
+                                      </div>
+                                    </div>
+
+                                    <div className="text-right">
+
+                                      <div className="font-black">
+                                        {scenario.price} {scenario.currency}
+                                      </div>
+
+                                      <div className="text-[10px] text-slate-400">
+                                        prix potentiel
+                                      </div>
+
+                                    </div>
+
+                                  </div>
+                                ))}
+
+                              </div>
+
+                            </div>
+                          )}
+
+                          {/* SCENARIO COMBINE */}
+
+                          {combined && (
+                            <div className="rounded-3xl bg-white p-5 ring-1 ring-orange-200">
+
+                              <div className="text-xs font-black uppercase tracking-widest text-orange-600">
+                                📈 Scénario combiné
+                              </div>
+
+                              <div className="mt-4 flex items-end justify-between gap-3">
+
+                                <div>
+                                  <div className="text-xs text-slate-400">Prix normal</div>
+                                  <div className="text-2xl font-black">
+                                    {combined.minimum_price} {combined.currency}
+                                  </div>
+                                </div>
+
+                                <div className="pb-2 text-xl text-slate-300">→</div>
+
+                                <div className="text-right">
+
+
+                                  
+                                  <div className="text-xs text-slate-400">Prix potentiel</div>
+
+                                  <div className="text-2xl font-black text-orange-600">
+                                    {combined.maximum_price} {combined.currency}
+                                  </div>
+
+                                </div>
+
+                              </div>
+
+                              <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+
+                                <div
+                                  className="h-full rounded-full bg-orange-500"
+                                  style={{
+                                    width: `${Math.min(combined.total_impact_percent || 0, 100)}%`,
+                                  }}
+                                />
+
+                              </div>
+
+                              <div className="mt-2 text-xs text-slate-500">
+                                Impact potentiel total :{" "}
+                                <strong>+{combined.total_impact_percent}%</strong>
+                              </div>
+
+                            </div>
+                          )}
+
+                          {/* CONFIANCE */}
+
+                          {r.confidence && (
+                            <div className="mt-4 text-center text-xs text-slate-400">
+                              Niveau de confiance :{" "}
+                              <strong className="text-slate-600">{r.confidence}</strong>
+                            </div>
+                          )}
+
+                        </div>
+                      )}
+
+                    </div>
+                  );
+                })}
+
+              </div>
+
             </div>
 
-            {/* MESSAGE PRIX */}
+            {/* =================================================
+                MESSAGE
+            ================================================= */}
+
             {result.pricing?.message && (
-              <div className="rounded-xl bg-gray-100 p-4 text-xs text-gray-500">
-                {result.pricing.message}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500">
+                ℹ️ {result.pricing.message}
               </div>
             )}
 
           </div>
         )}
+        </section>
 
-      </section>
+      {/* ======================================================
+          FOOTER
+      ====================================================== */}
+
+      <footer className="mx-auto max-w-5xl px-4 pb-8 pt-4 text-center text-xs text-slate-400">
+        ICEBERG · Comparateur de transport à Abidjan
+      </footer>
 
     </main>
   );
