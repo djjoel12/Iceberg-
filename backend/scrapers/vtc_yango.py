@@ -22,9 +22,10 @@ class YangoScraper:
         final_eco = self._apply_events(base_eco, events)
         low, high = self._price_range(final_eco)
 
-        combo_base = self._round(base_eco * 0.80)
-        confort_base = self._round(base_eco * 1.12)
-        confort_plus_base = self._round(base_eco * 1.28)
+        # === NOUVEAUX MULTIPLICATEURS ===
+        combo_base = self._round(base_eco * 0.60)      # 0.80 → 0.60
+        confort_base = self._round(base_eco * 1.08)    # 1.12 → 1.08
+        confort_plus_base = self._round(base_eco * 1.15)  # 1.28 → 1.15
 
         combo = self._apply_events(combo_base, events)
         confort = self._apply_events(confort_base, events)
@@ -38,23 +39,24 @@ class YangoScraper:
         ]
 
     def _estimate_eco(self, d: float) -> int:
+        # === NOUVELLES AUGMENTATIONS ===
         if d <= 5:
-            price = 1500 + (d - 3) * 150
+            price = 1500 + (d - 3) * 120   # 150 → 120
         elif d <= 10:
-            price = 1800 + (d - 5) * 180
+            price = 1800 + (d - 5) * 150   # 180 → 150
         elif d <= 20:
-            price = 3200 + (d - 10) * 90
+            price = 3200 + (d - 10) * 70   # 90 → 70
         elif d <= 30:
-            price = 4100 + (d - 20) * 80
+            price = 4100 + (d - 20) * 60   # 80 → 60
         elif d <= 40:
-            price = 4900 + (d - 30) * 120
+            price = 4900 + (d - 30) * 100  # 120 → 100
         else:
-            price = 6100 + (d - 40) * 160
+            price = 6100 + (d - 40) * 130  # 160 → 130
         return max(1500, self._round(price))
 
     def _detect_events(self) -> List[Dict[str, Any]]:
-        """Événements RÉELS et ACTIFS maintenant."""
-        hour = datetime.now(timezone.utc).hour  # ← UTC = Abidjan
+        """Événements RÉELS et ACTIFS maintenant (inchangés)."""
+        hour = datetime.now(timezone.utc).hour
         events = []
 
         if hour in [7, 8, 9]:
@@ -85,7 +87,7 @@ class YangoScraper:
         return events
 
     def _get_scenarios(self) -> List[Dict[str, Any]]:
-        """Scénarios POSSIBLES (toujours envoyés)."""
+        """Scénarios POSSIBLES (inchangés)."""
         return [
             {
                 "label": "Heure de pointe matin",
@@ -152,8 +154,8 @@ class YangoScraper:
             "is_estimate": True,
             "price_source": "iceberg_model_v1",
             "price_analysis": {
-                "events_detected": events,  # ← Événements réels
-                "scenarios": scenarios,      # ← Scénarios possibles
+                "events_detected": events,
+                "scenarios": scenarios,
                 "combined_scenario": {
                     "max_impact_percent": max_impact,
                     "normal_price": final_price,
